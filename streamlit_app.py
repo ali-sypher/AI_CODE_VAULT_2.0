@@ -58,6 +58,12 @@ import requests
 # --- Multi-Thread Intelligence Management ---
 if 'abort_event' not in st.session_state:
     st.session_state.abort_event = threading.Event()
+if 'is_scanning' not in st.session_state:
+    st.session_state.is_scanning = False
+if 'scan_progress' not in st.session_state:
+    st.session_state.scan_progress = 0
+if 'scan_status' not in st.session_state:
+    st.session_state.scan_status = ""
 
 def get_cyber_icon(name):
     icons = {
