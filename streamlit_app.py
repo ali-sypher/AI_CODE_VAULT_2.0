@@ -1094,8 +1094,8 @@ elif menu == "Architect":
                 for k in active_groq:
                     providers.append(("GROQ_CORE", "https://api.groq.com/openai/v1/chat/completions", k.key_value, "llama3-8b-8192"))
                 for k in active_or:
+                    providers.append(("OR_DEEPSEEK_FREE", "https://openrouter.ai/api/v1/chat/completions", k.key_value, "deepseek/deepseek-chat:free"))
                     providers.append(("OR_GEMINI_FREE", "https://openrouter.ai/api/v1/chat/completions", k.key_value, "google/gemini-2.0-flash-exp:free"))
-                    providers.append(("OR_LLAMA_FREE", "https://openrouter.ai/api/v1/chat/completions", k.key_value, "meta-llama/llama-3.1-8b-instruct:free"))
                 
                 success = False
                 if not providers:
@@ -1230,7 +1230,7 @@ elif menu == "Admin_Dashboard":
             if target_key:
                 st.write(f"Testing {target_key.provider}...")
                 p_url = "https://api.groq.com/openai/v1/chat/completions" if target_key.provider == "GROQ" else "https://openrouter.ai/api/v1/chat/completions"
-                p_model = "llama3-8b-8192" if target_key.provider == "GROQ" else "google/gemini-2.0-flash-exp:free"
+                p_model = "llama3-8b-8192" if target_key.provider == "GROQ" else "deepseek/deepseek-chat:free"
                 headers = {"Authorization": f"Bearer {target_key.key_value}", "Content-Type": "application/json"}
                 if "openrouter" in p_url: headers.update({"HTTP-Referer": "https://aicodevault.streamlit.app", "X-Title": "AI Code Vault Pro"})
                 try:
