@@ -123,6 +123,11 @@ st.markdown("""
         background: transparent !important;
     }
 
+    /* Fix: Move 'Enter to submit' hint to the left to avoid eye icon */
+    div[data-testid="stInputSocial"] {
+        right: 45px !important;
+    }
+
     /* Hide Streamlit Default UI Elements */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
