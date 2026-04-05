@@ -61,37 +61,72 @@ st.set_page_config(
 
 # --- Custom Styling (Immersive Cyber Space) ---
 st.markdown("""
+<div class="vault-bg-glow">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+</div>
 <style>
-    /* Hide Streamlit Default UI Elements */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-
+    /* Global UI Tweaks */
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700&family=Inter:wght@400;700&display=swap');
-    
+
     .stApp {
-        background-color: #0f0c29 !important;
-        background-image: 
-            radial-gradient(circle at 10% 10%, rgba(0, 242, 255, 0.25) 0%, transparent 50%),
-            radial-gradient(circle at 90% 90%, rgba(112, 0, 255, 0.25) 0%, transparent 50%),
-            linear-gradient(45deg, transparent, rgba(48, 43, 99, 0.5), transparent) !important;
-        background-size: 200vw 200vh, 200vw 200vh, 400% 400% !important;
-        animation: orbFloat 25s infinite alternate ease-in-out !important;
+        background-color: #05070a !important; /* Deep Onyx Base */
         font-family: 'Inter', sans-serif;
         color: #ffffff;
     }
-    
-    /* Crucial: Pull the Streamlit Content logic to the front */
-    .block-container {
+
+    /* Moving Orbs Background System */
+    .vault-bg-glow {
+        position: fixed;
+        top: 0; left: 0; 
+        width: 100vw; height: 100vh;
+        z-index: 0;
+        pointer-events: none;
+        overflow: hidden;
+    }
+
+    .orb {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(120px);
+        opacity: 0.4;
+        mix-blend-mode: screen;
+        pointer-events: none;
+    }
+
+    .orb-1 {
+        width: 800px; height: 800px;
+        background: radial-gradient(circle, rgba(0, 242, 255, 0.4), transparent 70%);
+        animation: floatOrb1 20s infinite alternate ease-in-out;
+    }
+
+    .orb-2 {
+        width: 1000px; height: 1000px;
+        background: radial-gradient(circle, rgba(112, 0, 255, 0.4), transparent 70%);
+        animation: floatOrb2 25s infinite alternate ease-in-out;
+    }
+
+    @keyframes floatOrb1 {
+        0% { transform: translate(-20%, -20%) scale(1); }
+        100% { transform: translate(40%, 30%) scale(1.1); }
+    }
+
+    @keyframes floatOrb2 {
+        0% { transform: translate(110%, 110%) scale(1); }
+        100% { transform: translate(50%, 40%) scale(0.9); }
+    }
+
+    /* Container Layering */
+    [data-testid="stAppViewBlockContainer"], .block-container {
         position: relative !important;
         z-index: 10 !important;
         background: transparent !important;
     }
 
-    @keyframes orbFloat {
-        0% { background-position: 0% 0%, 100% 100%, 0% 50%; }
-        50% { background-position: 30% 40%, 70% 60%, 100% 50%; }
-        100% { background-position: 10% 80%, 90% 20%, 0% 50%; }
-    }
+    /* Hide Streamlit Default UI Elements */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+
     .main-header {
         font-family: 'Outfit', sans-serif;
         font-size: 3.5rem;
@@ -102,26 +137,29 @@ st.markdown("""
         text-shadow: 0 0 20px rgba(0, 242, 255, 0.4);
         letter-spacing: -1px;
     }
+
     .glass-card {
-        background: rgba(13, 17, 23, 0.85);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(13, 17, 23, 0.75) !important;
+        backdrop-filter: blur(25px) saturate(160%) !important;
+        -webkit-backdrop-filter: blur(25px) saturate(160%) !important;
+        border: 1px solid rgba(0, 242, 255, 0.15) !important;
         border-radius: 20px;
         padding: 2.5rem;
         box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.9);
         margin-bottom: 2rem;
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
+
     .glass-card:hover {
         transform: translateY(-8px);
-        border: 1px solid rgba(0, 242, 255, 0.4);
-        box-shadow: 0 15px 50px 0 rgba(0, 242, 255, 0.15);
+        border: 1px solid rgba(0, 242, 255, 0.5) !important;
+        box-shadow: 0 15px 60px 0 rgba(0, 242, 255, 0.2) !important;
     }
+
     .stat-card {
         text-align: center;
         padding: 2rem;
-        background: rgba(0, 242, 255, 0.03);
+        background: rgba(0, 242, 255, 0.05);
         border-radius: 15px;
         border: 1px solid rgba(0, 242, 255, 0.1);
     }
