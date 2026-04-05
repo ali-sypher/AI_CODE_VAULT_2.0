@@ -7,3 +7,5 @@ openai
 python-dotenv
 sqlalchemy
 GitPython
+PyPDF2
+python-docx
