@@ -308,6 +308,16 @@ def hash_password(password):
 def verify_password(password, hashed):
     return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
 
+def load_chat_history():
+    if not st.session_state.authenticated or not st.session_state.user:
+        return
+    try:
+        user_id = st.session_state.user['id']
+        history = session.query(ChatMessage).filter(ChatMessage.user_id == user_id).order_by(ChatMessage.id.asc()).all()
+        st.session_state.messages = [{"role": msg.role, "content": msg.content} for msg in history]
+    except Exception as e:
+        print(f"Error loading chat history: {e}")
+
 # --- Login / Signup UI ---
 def auth_page():
     # Subtle Outline 'Return to Homepage' Button
