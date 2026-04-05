@@ -73,10 +73,25 @@ class KeyPool(Base):
     is_active = Column(Integer, default=1) # 1=Active, 0=Disabled
 
 def get_engine():
-    # Final reset for live app testing
-    is_cloud = os.path.exists("/mount/src") or os.environ.get("STREAMLIT_SERVER_PORT")
-    db_path = "/tmp/vault_v4.db" if is_cloud else "./vault_v4.db"
+    import shutil
+    # Detect cloud environment
+    is_cloud = os.path.exists("/mount/src") or os.environ.get("STREAMLIT_SERVER_PORT") or os.environ.get("STREAMLIT_RUNTIME_ENV")
     
+    # Safely handle read-only filesystem environments (e.g. Streamlit cloud /app or deployed github repo)
+    try:
+        is_writable = os.access(".", os.W_OK)
+    except Exception:
+        is_writable = False
+        
+    db_path = "/tmp/vault_v4.db" if (is_cloud or not is_writable) else "./vault_v4.db"
+    
+    # Try to copy existing DB over to volatile temp path if it doesn't exist there
+    if (is_cloud or not is_writable) and os.path.exists("./vault_v4.db") and not os.path.exists("/tmp/vault_v4.db"):
+        try:
+            shutil.copy2("./vault_v4.db", "/tmp/vault_v4.db")
+        except Exception:
+            pass
+            
     db_url = os.getenv("DATABASE_URL", f"sqlite:///{db_path}")
     return create_engine(db_url, connect_args={"check_same_thread": False} if "sqlite" in db_url else {})
 
@@ -112,7 +127,7 @@ def init_db():
     engine = get_engine()
     Base.metadata.create_all(engine)
     run_migrations(engine)
-    return sessionmaker(bind=engine)()
+    return sessionmaker(bind=engine)
 
 def bulk_insert_hubs(hubs_data):
     if not hubs_data: return

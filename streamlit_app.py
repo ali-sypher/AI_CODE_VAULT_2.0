@@ -5,6 +5,7 @@ import os
 import sys
 import time
 from datetime import datetime
+from sklearn.preprocessing import TfidfVectorizer
 
 # --- Add backend to path for modular imports ---
 sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
@@ -283,11 +284,11 @@ st.markdown("""
 
 # --- DB Initializer (Cached to avoid re-running on every page render) ---
 @st.cache_resource
-def get_db_session_v4():
-    sess = backend['init_db']()
-    return sess
+def get_db_factory_v4():
+    return backend['init_db']()
 
-session = get_db_session_v4()
+Factory = get_db_factory_v4()
+session = Factory()
 
 # --- Session State Management ---
 if 'authenticated' not in st.session_state:
