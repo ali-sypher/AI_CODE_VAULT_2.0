@@ -599,11 +599,19 @@ menu = st.session_state.menu
 st.sidebar.divider()
 st.sidebar.subheader("Neural Interface")
 with st.sidebar.expander("API Configuration"):
-    current_key = st.session_state.get('openrouter_key', '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')
-    new_key = st.text_input("OpenRouter Key", value=current_key, type="password", help="Update your API key here. Credits on OpenRouter are required.")
+    # OpenRouter Key
+    current_key = st.session_state.get('openrouter_key', '')
+    new_key = st.text_input("OpenRouter Key", value=current_key, type="password")
     if new_key != current_key:
         st.session_state.openrouter_key = new_key
-        st.sidebar.success("Interface mapping updated.")
+        st.sidebar.success("OpenRouter Mapped.")
+    
+    # Groq Key (Multi-Provider Support)
+    current_groq = st.session_state.get('groq_key', '')
+    new_groq = st.text_input("Groq Key", value=current_groq, type="password")
+    if new_groq != current_groq:
+        st.session_state.groq_key = new_groq
+        st.sidebar.success("Groq Mapped.")
 
 # --- Sidebar Activity Portal ---
 if st.session_state.user['role'] != 'Admin':
@@ -1065,31 +1073,33 @@ elif menu == "Architect":
                 Context: {context_text}
                 Question: {prompt}"""
                 
-                # API Key Hierarchy: Session State > Default Hardcoded Key
-                api_key = st.session_state.get('openrouter_key', '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')
+                # Hierarchy: Groq (Primary Speed) > OpenRouter (Fallback Quality)
+                groq_key = st.session_state.get('groq_key', '')
+                or_key = st.session_state.get('openrouter_key', '')
                 
-                # Resilient Fallback Hierarchy (including high-availability free tier)
-                models = [
-                    "anthropic/claude-3.5-sonnet:beta", 
-                    "google/gemini-pro-1.5", 
-                    "meta-llama/llama-3.1-70b-instruct", 
-                    "meta-llama/llama-3.1-8b-instruct:free",
-                    "openchat/openchat-7b:free"
+                # Check environment variables as well
+                if not groq_key: groq_key = os.getenv('GROQ_API_KEY', '')
+                if not or_key: or_key = os.getenv('OPENROUTER_API_KEY', '')
+
+                providers = [
+                    ("GROQ", "https://api.groq.com/openai/v1/chat/completions", groq_key, "llama-3.1-70b-versatile"),
+                    ("OPENROUTER", "https://openrouter.ai/api/v1/chat/completions", or_key, "anthropic/claude-3.5-sonnet:beta"),
+                    ("GROQ_FALLBACK", "https://api.groq.com/openai/v1/chat/completions", groq_key, "mixtral-8x7b-32768")
                 ]
                 
                 success = False
-                for model in models:
+                for p_name, p_url, p_key, p_model in providers:
+                    if not p_key or len(p_key) < 10: continue # Skip if no key
                     try:
+                        headers = {"Authorization": f"Bearer {p_key}", "Content-Type": "application/json"}
+                        if "openrouter" in p_url:
+                            headers.update({"HTTP-Referer": "https://aicodevault.streamlit.app", "X-Title": "AI Code Vault Pro"})
+                        
                         response = requests.post(
-                            url="https://openrouter.ai/api/v1/chat/completions",
-                            headers={
-                                "Authorization": f"Bearer {api_key}",
-                                "Content-Type": "application/json",
-                                "HTTP-Referer": "https://aicodevault.streamlit.app",
-                                "X-Title": "AI Code Vault Pro"
-                            },
+                            url=p_url,
+                            headers=headers,
                             data=json.dumps({
-                                "model": model, 
+                                "model": p_model, 
                                 "messages": [{"role": "user", "content": final_prompt}]
                             }),
                             timeout=60
@@ -1104,22 +1114,15 @@ elif menu == "Architect":
                             st.markdown(full_res)
                             st.session_state.messages.append({"role": "assistant", "content": full_res})
                             success = True
+                            st.caption(f"Neural Consultation secured via: {p_name} ({p_model})")
                             break
                         elif 'error' in data:
-                            # Advanced Error Reporting
-                            err_msg = data['error'].get('message', '')
-                            if 'credits' in err_msg.lower() or 'funds' in err_msg.lower():
-                                st.error("Neural Interface Exhausted: No credits remaining on OpenRouter.")
-                                break # Stop retrying if key is out of cash
-                            elif 'key' in err_msg.lower():
-                                st.error("Interface Rejection: API Key is invalid or restricted.")
-                                break
-                            st.caption(f"Bypass: {model} failed. Attempting {models[models.index(model)+1] if models.index(model)+1 < len(models) else 'End of list'}")
+                            st.caption(f"Bypass: {p_name} ({p_model}) failed. Attempting next provider...")
                     except Exception as e:
                         continue
                 
                 if not success:
-                    st.error("Global Neural Interface Failure: All specific models unreachable. Please verify credits or update API key in the sidebar.")
+                    st.error("Global Neural Interface Failure: All providers (Groq/OpenRouter) unreachable. Please supply an active API key in the sidebar.")
 
 elif menu == "Search":
     st.markdown(f"""
