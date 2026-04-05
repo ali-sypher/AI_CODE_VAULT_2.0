@@ -595,23 +595,31 @@ for key, label in menu_items:
 
 menu = st.session_state.menu
 
-# --- Sidebar History Content (User Scoped) ---
+# --- Sidebar Activity Portal ---
 if st.session_state.user['role'] != 'Admin':
     st.sidebar.divider()
-    st.sidebar.subheader("Recent Activity")
+    st.sidebar.subheader("Recent Technical Activity")
     user_id = st.session_state.user['id']
-    history = session.query(SearchHistory).filter(SearchHistory.user_id == user_id).order_by(SearchHistory.id.desc()).limit(10).all()
+    
+    # Session Grouping: Last 5 Searches & 5 Chats (Uniques)
+    recent_searches = session.query(SearchHistory).filter(SearchHistory.user_id == user_id).order_by(SearchHistory.id.desc()).limit(5).all()
+    recent_chats = session.query(ChatMessage).filter(ChatMessage.user_id == user_id, ChatMessage.role == 'user').order_by(ChatMessage.id.desc()).limit(5).all()
 
-    if history:
-        for h in history:
-            with st.sidebar.expander(f"Query: {h.query[:20]}..."):
-                st.caption(f"Time: {h.timestamp}")
-                if st.button("Re-run Query", key=f"hist_{h.id}"):
-                    st.session_state.search_query = h.query
-                    st.rerun()
+    if recent_searches or recent_chats:
+        st.sidebar.caption("Neural Retrieval (Recent)")
+        for rs in recent_searches:
+            if st.sidebar.button(rs.query[:25] + "...", key=f"rs_{rs.id}", help=rs.query, use_container_width=True):
+                st.session_state.menu = "Search"
+                st.session_state.neural_search_input = rs.query
+                st.rerun()
 
+        st.sidebar.caption("Architect Consultations")
+        for rc in recent_chats:
+            if st.sidebar.button(rc.content[:25] + "...", key=f"rc_{rc.id}", help=rc.content, use_container_width=True):
+                st.session_state.menu = "Architect"
+                st.rerun()
     else:
-        st.sidebar.info("No query history yet.")
+        st.sidebar.info("System activity logs are currenty empty.")
 
 # --- Functions ---
 def background_scan_task(repo_url, user_id):
@@ -1004,6 +1012,12 @@ elif menu == "Architect":
     st.write("Context-aware interface for codebase analysis and architecture review.")
     
     # --- Main Chat Interface ---
+    if st.button("Purge Chat History", help="Delete current consultation logs permanently", use_container_width=True, type="secondary"):
+        session.query(ChatMessage).filter(ChatMessage.user_id == st.session_state.user['id']).delete()
+        session.commit()
+        st.session_state.messages = []
+        st.rerun()
+
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
@@ -1028,38 +1042,47 @@ elif menu == "Architect":
                 Context: {context_text}
                 Question: {prompt}"""
                 
-                try:
-                    # Model: anthropic/claude-3.5-sonnet:beta is the stable OpenRouter endpoint
-                    api_key = os.getenv('OPENROUTER_API_KEY', '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')
-                    response = requests.post(
-                        url="https://openrouter.ai/api/v1/chat/completions",
-                        headers={
-                            "Authorization": f"Bearer {api_key}",
-                            "Content-Type": "application/json",
-                            "HTTP-Referer": "https://aicodevault.streamlit.app",
-                            "X-Title": "AI Code Vault Pro"
-                        },
-                        data=json.dumps({
-                            "model": "anthropic/claude-3.5-sonnet:beta", 
-                            "messages": [{"role": "user", "content": final_prompt}]
-                        }),
-                        timeout=45
-                    )
-                    data = response.json()
-                    
-                    if 'error' in data:
-                        st.error(f"Consultation Error: {data['error'].get('message', 'Model Endpoint Error')}")
-                    elif 'choices' in data:
-                        full_res = data['choices'][0]['message']['content']
-                        ai_msg = ChatMessage(user_id=st.session_state.user['id'], role="assistant", content=full_res, timestamp=datetime.now().isoformat())
-                        session.add(ai_msg)
-                        session.commit()
-                        st.markdown(full_res)
-                        st.session_state.messages.append({"role": "assistant", "content": full_res})
-                    else:
-                        st.error("Protocol Mismatch: Unexpected API structure.")
-                except Exception as e:
-                    st.error(f"Interface Fault: {str(e)}")
+                # API Key (User Provided)
+                api_key = os.getenv('OPENROUTER_API_KEY', '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')
+                
+                # Dynamic Model Fallback system
+                models = ["anthropic/claude-3.5-sonnet:beta", "anthropic/claude-3-5-sonnet", "google/gemini-pro-1.5", "meta-llama/llama-3.1-405b-instruct"]
+                
+                success = False
+                for model in models:
+                    try:
+                        response = requests.post(
+                            url="https://openrouter.ai/api/v1/chat/completions",
+                            headers={
+                                "Authorization": f"Bearer {api_key}",
+                                "Content-Type": "application/json",
+                                "HTTP-Referer": "https://aicodevault.streamlit.app",
+                                "X-Title": "AI Code Vault Pro"
+                            },
+                            data=json.dumps({
+                                "model": model, 
+                                "messages": [{"role": "user", "content": final_prompt}]
+                            }),
+                            timeout=60
+                        )
+                        data = response.json()
+                        
+                        if 'choices' in data:
+                            full_res = data['choices'][0]['message']['content']
+                            ai_msg = ChatMessage(user_id=st.session_state.user['id'], role="assistant", content=full_res, timestamp=datetime.now().isoformat())
+                            session.add(ai_msg)
+                            session.commit()
+                            st.markdown(full_res)
+                            st.session_state.messages.append({"role": "assistant", "content": full_res})
+                            success = True
+                            break
+                        elif 'error' in data:
+                            st.caption(f"Endpoint Bypass: Model {model} unavailable. Attempting fallback...")
+                    except Exception as e:
+                        continue
+                
+                if not success:
+                    st.error("Global Neural Interface Failure: All specific models unreachable. Check API credits or connection.")
 
 elif menu == "Search":
     st.markdown(f"""
