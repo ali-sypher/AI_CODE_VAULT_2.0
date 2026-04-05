@@ -26,6 +26,7 @@ def load_backend_v2():
         'ChatMessage': ChatMessage,
         'FileMetadata': FileMetadata,
         'Satellite': Satellite,
+        'KeyPool': KeyPool,
         'get_repo_chunks': get_repo_chunks,
         'parse_code_chunk': parse_code_chunk,
         'generate_embedding': generate_embedding,
@@ -41,6 +42,7 @@ User = backend['User']
 ChatMessage = backend['ChatMessage']
 FileMetadata = backend['FileMetadata']
 Satellite = backend['Satellite']
+KeyPool = backend['KeyPool']
 get_repo_chunks = backend['get_repo_chunks']
 parse_code_chunk = backend['parse_code_chunk']
 generate_embedding = backend['generate_embedding']
@@ -595,23 +597,10 @@ for key, label in menu_items:
 
 menu = st.session_state.menu
 
-# --- Sidebar API Configuration ---
+# --- Sidebar Managed Status ---
 st.sidebar.divider()
-st.sidebar.subheader("Neural Interface")
-with st.sidebar.expander("API Configuration"):
-    # OpenRouter Key
-    current_key = st.session_state.get('openrouter_key', '')
-    new_key = st.text_input("OpenRouter Key", value=current_key, type="password")
-    if new_key != current_key:
-        st.session_state.openrouter_key = new_key
-        st.sidebar.success("OpenRouter Mapped.")
-    
-    # Groq Key (Multi-Provider Support)
-    current_groq = st.session_state.get('groq_key', '')
-    new_groq = st.text_input("Groq Key", value=current_groq, type="password")
-    if new_groq != current_groq:
-        st.session_state.groq_key = new_groq
-        st.sidebar.success("Groq Mapped.")
+st.sidebar.caption("Neural Interface: Managed by Global Administration")
+st.sidebar.info("Enterprise Protocol: All API credentials are pre-configured in the Admin Vault.")
 
 # --- Sidebar Activity Portal ---
 if st.session_state.user['role'] != 'Admin':
@@ -1073,56 +1062,50 @@ elif menu == "Architect":
                 Context: {context_text}
                 Question: {prompt}"""
                 
-                # Hierarchy: Groq (Primary Speed) > OpenRouter (Fallback Quality)
-                groq_key = st.session_state.get('groq_key', '')
-                or_key = st.session_state.get('openrouter_key', '')
+                # Rotate through Active Admin Key Pool
+                active_groq = session.query(KeyPool).filter(KeyPool.provider == 'GROQ', KeyPool.is_active == 1).all()
+                active_or = session.query(KeyPool).filter(KeyPool.provider == 'OPENROUTER', KeyPool.is_active == 1).all()
                 
-                # Check environment variables as well
-                if not groq_key: groq_key = os.getenv('GROQ_API_KEY', '')
-                if not or_key: or_key = os.getenv('OPENROUTER_API_KEY', '')
-
-                providers = [
-                    ("GROQ", "https://api.groq.com/openai/v1/chat/completions", groq_key, "llama-3.1-70b-versatile"),
-                    ("OPENROUTER", "https://openrouter.ai/api/v1/chat/completions", or_key, "anthropic/claude-3.5-sonnet:beta"),
-                    ("GROQ_FALLBACK", "https://api.groq.com/openai/v1/chat/completions", groq_key, "mixtral-8x7b-32768")
-                ]
+                providers = []
+                for k in active_groq:
+                    providers.append(("GROQ", "https://api.groq.com/openai/v1/chat/completions", k.key_value, "llama-3.1-70b-versatile"))
+                for k in active_or:
+                    providers.append(("OPENROUTER", "https://openrouter.ai/api/v1/chat/completions", k.key_value, "anthropic/claude-3.5-sonnet:beta"))
                 
                 success = False
-                for p_name, p_url, p_key, p_model in providers:
-                    if not p_key or len(p_key) < 10: continue # Skip if no key
-                    try:
-                        headers = {"Authorization": f"Bearer {p_key}", "Content-Type": "application/json"}
-                        if "openrouter" in p_url:
-                            headers.update({"HTTP-Referer": "https://aicodevault.streamlit.app", "X-Title": "AI Code Vault Pro"})
-                        
-                        response = requests.post(
-                            url=p_url,
-                            headers=headers,
-                            data=json.dumps({
-                                "model": p_model, 
-                                "messages": [{"role": "user", "content": final_prompt}]
-                            }),
-                            timeout=60
-                        )
-                        data = response.json()
-                        
-                        if 'choices' in data:
-                            full_res = data['choices'][0]['message']['content']
-                            ai_msg = ChatMessage(user_id=st.session_state.user['id'], role="assistant", content=full_res, timestamp=datetime.now().isoformat())
-                            session.add(ai_msg)
-                            session.commit()
-                            st.markdown(full_res)
-                            st.session_state.messages.append({"role": "assistant", "content": full_res})
-                            success = True
-                            st.caption(f"Neural Consultation secured via: {p_name} ({p_model})")
-                            break
-                        elif 'error' in data:
-                            st.caption(f"Bypass: {p_name} ({p_model}) failed. Attempting next provider...")
-                    except Exception as e:
-                        continue
+                if not providers:
+                    st.error("Global Neural Interface Offline: No active API keys available in the Admin Pool.")
+                else:
+                    for p_name, p_url, p_key, p_model in providers:
+                        try:
+                            headers = {"Authorization": f"Bearer {p_key}", "Content-Type": "application/json"}
+                            if "openrouter" in p_url:
+                                headers.update({"HTTP-Referer": "https://aicodevault.streamlit.app", "X-Title": "AI Code Vault Pro"})
+                            
+                            response = requests.post(
+                                url=p_url, headers=headers,
+                                data=json.dumps({"model": p_model, "messages": [{"role": "user", "content": final_prompt}]}),
+                                timeout=60
+                            )
+                            data = response.json()
+                            
+                            if 'choices' in data:
+                                full_res = data['choices'][0]['message']['content']
+                                ai_msg = ChatMessage(user_id=st.session_state.user['id'], role="assistant", content=full_res, timestamp=datetime.now().isoformat())
+                                session.add(ai_msg)
+                                session.commit()
+                                st.markdown(full_res)
+                                st.session_state.messages.append({"role": "assistant", "content": full_res})
+                                success = True
+                                st.caption(f"Neural Consultation secured via Admin Pool: {p_name}")
+                                break
+                            elif 'error' in data:
+                                st.caption(f"Asset Bypass: {p_name} failure. Rotating...")
+                        except Exception:
+                            continue
                 
-                if not success:
-                    st.error("Global Neural Interface Failure: All providers (Groq/OpenRouter) unreachable. Please supply an active API key in the sidebar.")
+                if not success and providers:
+                    st.error("Neural Interface Exhausted: All Admin-supplied assets failed validation.")
 
 elif menu == "Search":
     st.markdown(f"""
@@ -1159,9 +1142,48 @@ elif menu == "Analytics":
     col3.metric("Avg Latency", "0.1s")
     
     st.divider()
-    st.subheader("System Status")
-    st.success("All systems operational. SQLite Database Connected.")
-    st.json({"Engine": "Streamlit", "Version": "V2.0-Alpha", "Model": "OpenRouter-Sonnnet"})
+    st.subheader("Neural Interface Management (Global Key Pool)")
+    st.write("Supply and maintain the global API asset pool shared by all users.")
+    
+    with st.form("add_global_key_form"):
+        col_k1, col_k2, col_k3 = st.columns([1,2,1])
+        k_prov = col_k1.selectbox("Provider Engine", ["GROQ", "OPENROUTER"])
+        k_val = col_k2.text_input("New API Key Secret", type="password")
+        k_name = col_k3.text_input("Assigned Name", value="Global_Asset")
+        if st.form_submit_button("Vault Secure Key"):
+            if k_val:
+                new_pool_key = KeyPool(provider=k_prov, key_value=k_val, name=k_name, is_active=1)
+                session.add(new_pool_key)
+                session.commit()
+                st.success(f"Global Asset '{k_name}' successfully vaulted.")
+                st.rerun()
+                
+    st.write("Current Neural Asset Inventory:")
+    pool_keys = session.query(KeyPool).all()
+    if pool_keys:
+        df_pool = pd.DataFrame([{
+            "ID": k.id,
+            "Engine": k.provider,
+            "Label": k.name,
+            "Status": "OPERATIONAL" if k.is_active else "DISABLED",
+            "Signature": k.key_value[:10] + "..."
+        } for k in pool_keys])
+        st.dataframe(df_pool, use_container_width=True, hide_index=True)
+        
+        sel_key_id = st.number_input("Target Asset ID:", step=1, value=0)
+        col_ka, col_kb = st.columns(2)
+        if col_ka.button("Toggle Operational Status", use_container_width=True):
+            target_key = session.query(KeyPool).filter(KeyPool.id == sel_key_id).first()
+            if target_key:
+                target_key.is_active = 0 if target_key.is_active else 1
+                session.commit()
+                st.rerun()
+        if col_kb.button("Discard Asset Permanently", use_container_width=True, type="primary"):
+            session.query(KeyPool).filter(KeyPool.id == sel_key_id).delete()
+            session.commit()
+            st.rerun()
+    else:
+        st.info("Global asset pool is empty. Supply credentials to enable high-fidelity consultations.")
 
 elif menu == "Admin_Dashboard":
     st.header("Global Admin Dashboard")
