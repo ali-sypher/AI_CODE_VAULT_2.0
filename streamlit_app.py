@@ -158,9 +158,7 @@ st.markdown("""
     }
 
     .glass-card:hover {
-        transform: translateY(-8px);
-        border: 1px solid rgba(0, 242, 255, 0.5) !important;
-        box-shadow: 0 15px 60px 0 rgba(0, 242, 255, 0.2) !important;
+        /* Glow and highlight removed as per user request */
     }
 
     .stat-card {
@@ -547,22 +545,6 @@ if st.session_state.user['role'] != 'Admin':
     else:
         st.sidebar.info("No query history yet.")
 
-    # --- Persistent Scan Progress (Sidebar) ---
-    # Polling DB to ensure persistence across refreshes
-    try:
-        db_current_user = session.query(User).filter(User.id == st.session_state.user['id']).first()
-        if db_current_user and db_current_user.scan_status and db_current_user.scan_status != "Complete" and not db_current_user.scan_status.startswith("Critical Failure"):
-            st.sidebar.markdown("---")
-            st.sidebar.subheader("🛰️ Active Ingestion")
-            st.sidebar.info(db_current_user.scan_status)
-            st.sidebar.progress(db_current_user.scan_progress)
-            
-            # This triggers a rerun after 3 seconds to update the progress bar automatically
-            time.sleep(3)
-            st.rerun()
-    except Exception as e:
-        pass # Handle potential session conflicts gracefully
-
 # --- Functions ---
 def background_scan_task(repo_url, user_id):
     """Execution logic in a background thread"""
@@ -801,13 +783,21 @@ def reset_vault():
     st.rerun()
 
 # --- MAIN UI ---
-col_logo, col_text = st.columns([1, 8])
-with col_logo:
-    st.image("assets/ai_vault_pro_logo.png", width=80)
-with col_text:
-    st.markdown('<div class="main-header">AI CODE VAULT V2.0</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">AI CODE VAULT V2.0</div>', unsafe_allow_html=True)
 
-# --- Persistent Background Progress UI (Moved to Sidebar for better visibility)
+# Persistent Background Progress UI
+# Fetch latest from DB to support persistence across refreshes
+db_current_user = session.query(User).filter(User.id == st.session_state.user['id']).first()
+if db_current_user and db_current_user.scan_status and db_current_user.scan_status != "Complete" and not db_current_user.scan_status.startswith("Critical Failure"):
+    with st.container():
+        st.info(f"🛰️ Remote Scan Active: {db_current_user.scan_status}")
+        st.progress(db_current_user.scan_progress)
+        if st.button("Check Scan Update", key="scan_check_btn"):
+            st.rerun()
+elif st.session_state.is_scanning:
+    with st.container():
+        st.info(f"⚡ Background Scan Active: {st.session_state.scan_status}")
+        st.progress(st.session_state.scan_progress)
 
 if menu == "Ingest":
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
@@ -832,17 +822,18 @@ if menu == "Ingest":
                 st.rerun()
 
     if st.session_state.scan_message:
-        st.info(st.session_state.scan_message)
+        st.success(st.session_state.scan_message)
         st.session_state.scan_message = ""
         
-    if st.session_state.is_scanning:
-        if LOTTIE_SCAN:
-            col_l, col_r = st.columns([1,2])
-            with col_l:
-                st_lottie(LOTTIE_SCAN, height=200, key="scan_lottie")
-            with col_r:
-                st.info(f"⚡ {st.session_state.scan_status}")
-                st.progress(st.session_state.scan_progress)
+    # Real-time Progress Display in Ingest Tab
+    db_current_user = session.query(User).filter(User.id == st.session_state.user['id']).first()
+    if db_current_user and db_current_user.scan_status and db_current_user.scan_status != "Complete" and not db_current_user.scan_status.startswith("Critical Failure"):
+        st.markdown("---")
+        st.subheader("🛰️ Repository Ingestion in Progress")
+        st.info(f"**Status:** {db_current_user.scan_status}")
+        st.progress(db_current_user.scan_progress)
+        if st.button("Refresh Monitor", key="refresh_monitor_btn"):
+            st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
 elif menu == "Explorer":
