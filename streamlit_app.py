@@ -54,7 +54,7 @@ import requests
 # --- Page Configuration ---
 st.set_page_config(
     page_title="AI Code Vault 2.0",
-    page_icon=r"C:\Users\Ali Aliyyan\.gemini\antigravity\brain\f10956f1-2a7c-4353-8e8f-678d5e4bd8ab\ai_vault_pro_logo_1775332828537.png",
+               page_icon=None,
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -266,7 +266,7 @@ def auth_page():
         }
         </style>
         <div style='text-align: left; padding-left: 5%; margin-bottom: -20px; z-index: 100; position: relative;'>
-            <a href='http://localhost:8000/index.html' class='premium-back-btn'>
+                        <a href='https://ali-sypher.github.io/AI_CODE_VAULT_2.0/' class='premium-back-btn'>
                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
                 </svg>
@@ -390,7 +390,7 @@ def auth_page():
         st.markdown('</div>', unsafe_allow_html=True)
 
 # --- Sidebar Navigation ---
-st.sidebar.image(r"C:\Users\Ali Aliyyan\.gemini\antigravity\brain\f10956f1-2a7c-4353-8e8f-678d5e4bd8ab\ai_vault_pro_logo_1775332828537.png", use_container_width=True)
+    # st.sidebar.image(N
 st.sidebar.markdown("<h2 style='text-align: center; color: #00f2ff; font-family: Outfit;'>COMMAND CENTER</h2>", unsafe_allow_html=True)
 
 if not st.session_state.authenticated:
