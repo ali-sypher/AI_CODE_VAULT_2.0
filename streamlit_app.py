@@ -58,11 +58,8 @@ import extra_streamlit_components as stx
 import uuid
 
 # --- Cookie Management Hub ---
-@st.cache_resource
-def get_cookie_manager():
-    return stx.CookieManager()
-
-cookie_manager = get_cookie_manager()
+# (Components like CookieManager should not be cached as they act like widgets)
+cookie_manager = stx.CookieManager()
 
 # --- Multi-Thread Intelligence Management ---
 if 'abort_event' not in st.session_state:
