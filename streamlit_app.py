@@ -320,6 +320,10 @@ def auth_page():
             color: #00f2ff !important;
             text-shadow: 0 0 10px rgba(0, 242, 255, 0.5) !important;
         }
+        .stTextInput label p {
+            color: #c9d1d9 !important;
+            font-weight: 600 !important;
+        }
         </style>
         <div class="marquee-container">
             <div class="marquee-content">
@@ -363,7 +367,7 @@ def auth_page():
                         st.error("Explicit Warning: Password match error or User not found!")
         
         with tab2:
-            with st.form("signup_form"):
+            with st.form("signup_form", clear_on_submit=True):
                 new_email = st.text_input("Email")
                 new_pass = st.text_input("Password", type="password")
                 confirm_pass = st.text_input("Confirm Password", type="password")
@@ -390,7 +394,7 @@ def auth_page():
         st.markdown('</div>', unsafe_allow_html=True)
 
 # --- Sidebar Navigation ---
-# st.sidebar.image("assets/ai_vault_pro_logo.png", use_container_width=True) # Logo missing remotely
+st.sidebar.image("assets/ai_vault_pro_logo.png", use_container_width=True)
 st.sidebar.markdown("<h2 style='text-align: center; color: #00f2ff; font-family: Outfit;'>COMMAND CENTER</h2>", unsafe_allow_html=True)
 
 if not st.session_state.authenticated:
@@ -658,7 +662,11 @@ def reset_vault():
     st.rerun()
 
 # --- MAIN UI ---
-st.markdown('<div class="main-header">AI CODE VAULT V2.0</div>', unsafe_allow_html=True)
+col_logo, col_text = st.columns([1, 8])
+with col_logo:
+    st.image("assets/ai_vault_pro_logo.png", width=80)
+with col_text:
+    st.markdown('<div class="main-header">AI CODE VAULT V2.0</div>', unsafe_allow_html=True)
 
 # Persistent Background Progress UI
 if st.session_state.is_scanning:
