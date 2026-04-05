@@ -128,7 +128,7 @@ st.markdown("""
         right: 45px !important;
     }
     /* Hide 'Enter to submit' hint ONLY for the password field to avoid overlap with eye icon */
-    div[data-testid="stTextInput"]:has(input[type="password"]) div[data-testid="stInputSocial"] {
+    input[type="password"] ~ div[data-testid="stInputSocial"] {
         display: none !important;
     }
 
