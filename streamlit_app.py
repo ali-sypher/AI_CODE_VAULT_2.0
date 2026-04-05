@@ -1116,8 +1116,10 @@ elif menu == "Architect":
                                 st.caption(f"Neural Consultation secured via Admin Pool: {p_name}")
                                 break
                             elif 'error' in data:
-                                st.caption(f"Asset Bypass: {p_name} failure. Rotating...")
-                        except Exception:
+                                err_msg = data['error'].get('message', 'Unknown Protocol Error')
+                                st.caption(f"Asset Bypass: {p_name} failed. Error: {err_msg}")
+                        except Exception as e:
+                            st.caption(f"Asset Connection Error {p_name}: {str(e)}")
                             continue
                 
                 if not success and providers:
