@@ -5,7 +5,6 @@ import os
 import sys
 import time
 from datetime import datetime
-import json
 
 # --- Add backend to path for modular imports ---
 sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
@@ -54,7 +53,6 @@ from sqlalchemy.orm import Session
 import threading
 import shutil
 import bcrypt
-from streamlit_lottie import st_lottie
 import requests
 
 def get_cyber_icon(name):
@@ -279,25 +277,10 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- DB Initializer (Un-cached to force table generation and bootstrap) ---
+# --- DB Initializer (Cached to avoid re-running on every page render) ---
+@st.cache_resource
 def get_db_session_v4():
     sess = backend['init_db']()
-    # Automated Neural Interface Bootstrapper (Obfuscated to satisfy GitHub security standards)
-    import base64
-    from db_connector import KeyPool
-    
-    # Only bootstrap if empty, DO NOT wipe existing user keys
-    if sess.query(KeyPool).count() == 0:
-        assets = [
-            ("GROQ", "Z3NrXzk3QmMxQjNmSFEzYmd2REV3ckdFV0dyeWIzRll0VU9rZUpIZDd3UU9TQjZ6VXJqWU1qVko=", "Alpha_Core"),
-            ("GROQ", "Z3NrX1Z5eEtGYk9FQVZ6VlNIZ2k1OHRvV0dyeWIzRlliWnZxNE1yUXJ6SHZROWZJMlVVRERadWM=", "Beta_Core"),
-            ("OPENROUTER", "c2stb3ItdjEtNmRkMTkwNTNjMzEwNWVlZDYzNzhjNTdlMTI3YmU0ODRjMTNjMjQ0ODU3YWZiMjc5NzI5ZTlkNTI2YWE0NTY3NA==", "Nexus_Prime"),
-            ("OPENROUTER", "c2stb3ItdjEtN2M1Y2I1ODZlZTY1ZTg1OTIxNDM1NGVlMjc5ZWYwNDg0Y2YyNmIxMzc4MjRmNjIxYTFmNzI2MGQyMzU5ODE4OQ==", "Nexus_Secondary")
-        ]
-        for prov, b64_key, name in assets:
-            raw_key = base64.b64decode(b64_key).decode('utf-8').strip()
-            sess.add(KeyPool(provider=prov, key_value=raw_key, name=name, is_active=1))
-        sess.commit()
     return sess
 
 session = get_db_session_v4()
@@ -307,31 +290,10 @@ if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
 if 'user' not in st.session_state:
     st.session_state.user = None
-if 'is_scanning' not in st.session_state:
-    st.session_state.is_scanning = False
-if 'scan_progress' not in st.session_state:
-    st.session_state.scan_progress = 0
-if 'scan_status' not in st.session_state:
-    st.session_state.scan_status = ""
-if 'scan_message' not in st.session_state:
-    st.session_state.scan_message = ""
-if 'hubs_indexed' not in st.session_state:
-    st.session_state.hubs_indexed = 0
 if 'messages' not in st.session_state:
     st.session_state.messages = []
-
-def load_chat_history():
-    if st.session_state.user:
-        history = session.query(ChatMessage).filter(ChatMessage.user_id == st.session_state.user['id']).order_by(ChatMessage.id).all()
-        st.session_state.messages = [{"role": msg.role, "content": msg.content} for msg in history]
-
-@st.cache_data
-def load_lottiefile(filepath: str):
-    with open(filepath, "r") as f:
-        return json.load(f)
-
-LOTTIE_AUTH = load_lottiefile("assets/auth.json")
-LOTTIE_SCAN = load_lottiefile("assets/scan.json")
+if 'scan_message' not in st.session_state:
+    st.session_state.scan_message = ""
 
 def hash_password(password):
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
