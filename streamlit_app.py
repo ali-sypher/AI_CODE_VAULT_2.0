@@ -294,10 +294,10 @@ def get_db_session_v4():
 
     if sess.query(KeyPool).count() == 0:
         assets = [
-            ("GROQ", "Z3NrXzk3QmMxQjNmSFEzYmd2REV3ckdFV0dyeWIzRll0VU9rZUpIZDd3UU9TQjZ6VXJqWU1qVko=", "Primary_Alpha"),
-            ("GROQ", "Z3NrX1Z5eEtGYk9FQVZ6VlNIZ2k1OHRvV0dyeWIzRlliWnZxNE1yUXJ6SHZROWZJMlVVRERadWM=", "Primary_Beta"),
-            ("OPENROUTER", "c2stb3ItdjEtNmRkMTkwNTNjMzEwNWVlZDYzNzhjNTdlMTI3YmU0ODRjMTNjMjQ0ODU3YWZiMjc5NzI5ZTlkNTI2YWE0NTY3NA==", "Sonnet_Alpha"),
-            ("OPENROUTER", "c2stb3ItdjEtN2M1Y2I1ODZlZTY1ZTg1OTIxNDM1NGVlMjc5ZWYwNDg0Y2YyNmIxMzc4MjRmNjIxYTFmNzI2MGQyMzU5ODE4OQ==", "Sonnet_Beta")
+            ("GROQ", "Z3NrXzk3QmMxQjNmSFEzYmd2REV3ckdFV0dyeWIzRll0VU9rZUpIZDd3UU9TQjZ6VXJqWU1qVko=", "Alpha_Core"),
+            ("GROQ", "Z3NrX1Z5eEtGYk9FQVZ6VlNIZ2k1OHRvV0dyeWIzRlliWnZxNE1yUXJ6SHZROWZJMlVVRERadWM=", "Beta_Core"),
+            ("OPENROUTER", "c2stb3ItdjEtNmRkMTkwNTNjMzEwNWVlZDYzNzhjNTdlMTI3YmU0ODRjMTNjMjQ0ODU3YWZiMjc5NzI5ZTlkNTI2YWE0NTY3NA==", "Nexus_Prime"),
+            ("OPENROUTER", "c2stb3ItdjEtN2M1Y2I1ODZlZTY1ZTg1OTIxNDM1NGVlMjc5ZWYwNDg0Y2YyNmIxMzc4MjRmNjIxYTFmNzI2MGQyMzU5ODE4OQ==", "Nexus_Secondary")
         ]
         for prov, b64_key, name in assets:
             raw_key = base64.b64decode(b64_key).decode('utf-8').strip()
@@ -858,10 +858,13 @@ def run_hybrid_search(query):
     
     scored_results = []
     for r in results:
-        emb = np.array(r.embedding) if r.embedding else None
+        emb = np.array(r.embedding) if r.embedding and len(r.embedding) > 0 else None
         if emb is not None:
-            # Cosine similarity
-            sim = np.dot(emb, query_vector) / (np.linalg.norm(emb) * np.linalg.norm(query_vector))
+            try:
+                # Cosine similarity
+                sim = np.dot(emb, query_vector) / (np.linalg.norm(emb) * np.linalg.norm(query_vector))
+            except:
+                sim = 0
         else:
             sim = 0
             
@@ -1089,9 +1092,10 @@ elif menu == "Architect":
                 
                 providers = []
                 for k in active_groq:
-                    providers.append(("GROQ", "https://api.groq.com/openai/v1/chat/completions", k.key_value, "llama3-70b-8192"))
+                    providers.append(("GROQ_CORE", "https://api.groq.com/openai/v1/chat/completions", k.key_value, "llama3-70b-8192"))
                 for k in active_or:
-                    providers.append(("OPENROUTER", "https://openrouter.ai/api/v1/chat/completions", k.key_value, "anthropic/claude-3.5-sonnet"))
+                    providers.append(("OR_GEMINI", "https://openrouter.ai/api/v1/chat/completions", k.key_value, "google/gemini-pro-1.5"))
+                    providers.append(("OR_SONNET", "https://openrouter.ai/api/v1/chat/completions", k.key_value, "anthropic/claude-3.5-sonnet"))
                 
                 success = False
                 if not providers:
@@ -1122,7 +1126,7 @@ elif menu == "Architect":
                                 break
                             elif 'error' in data:
                                 err_msg = data['error'].get('message', 'Unknown Protocol Error')
-                                st.caption(f"Asset Bypass: {p_name} failed. Error: {err_msg}")
+                                st.caption(f"Asset Bypass: {p_name} [{response.status_code}] failed. Error: {err_msg}")
                         except Exception as e:
                             st.caption(f"Asset Connection Error {p_name}: {str(e)}")
                             continue
@@ -1210,7 +1214,7 @@ elif menu == "Admin_Dashboard":
         st.dataframe(df_pool, use_container_width=True, hide_index=True)
         
         sel_key_id = st.number_input("Target Asset ID:", step=1, value=0)
-        col_ka, col_kb = st.columns(2)
+        col_ka, col_kb, col_kc = st.columns(3)
         if col_ka.button("Toggle Operational Status", use_container_width=True):
             target_key = session.query(KeyPool).filter(KeyPool.id == sel_key_id).first()
             if target_key:
@@ -1221,6 +1225,21 @@ elif menu == "Admin_Dashboard":
             session.query(KeyPool).filter(KeyPool.id == sel_key_id).delete()
             session.commit()
             st.rerun()
+        if col_kc.button("Neural Pulse Test", use_container_width=True):
+            target_key = session.query(KeyPool).filter(KeyPool.id == sel_key_id).first()
+            if target_key:
+                st.write(f"Testing {target_key.provider}...")
+                p_url = "https://api.groq.com/openai/v1/chat/completions" if target_key.provider == "GROQ" else "https://openrouter.ai/api/v1/chat/completions"
+                p_model = "llama3-8b-8192" if target_key.provider == "GROQ" else "google/gemini-pro-1.5"
+                headers = {"Authorization": f"Bearer {target_key.key_value}", "Content-Type": "application/json"}
+                if "openrouter" in p_url: headers.update({"HTTP-Referer": "https://aicodevault.streamlit.app", "X-Title": "AI Code Vault Pro"})
+                try:
+                    res = requests.post(p_url, headers=headers, json={"model": p_model, "messages": [{"role": "user", "content": "hi"}], "max_tokens": 1}, timeout=10)
+                    st.json(res.json())
+                except Exception as e:
+                    st.error(f"Pulse Failed: {e}")
+            else:
+                st.warning("Select a valid Asset ID first.")
     else:
         st.info("Global asset pool is empty. Supply credentials to enable high-fidelity consultations.")
 
