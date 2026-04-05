@@ -1089,7 +1089,7 @@ elif menu == "Architect":
                 
                 providers = []
                 for k in active_groq:
-                    providers.append(("GROQ", "https://api.groq.com/openai/v1/chat/completions", k.key_value, "llama-3.1-70b-versatile"))
+                    providers.append(("GROQ", "https://api.groq.com/openai/v1/chat/completions", k.key_value, "llama3-70b-8192"))
                 for k in active_or:
                     providers.append(("OPENROUTER", "https://openrouter.ai/api/v1/chat/completions", k.key_value, "anthropic/claude-3.5-sonnet"))
                 
@@ -1105,7 +1105,7 @@ elif menu == "Architect":
                             
                             response = requests.post(
                                 url=p_url, headers=headers,
-                                data=json.dumps({"model": p_model, "messages": [{"role": "user", "content": final_prompt}]}),
+                                json={"model": p_model, "messages": [{"role": "user", "content": final_prompt}]},
                                 timeout=60
                             )
                             data = response.json()
@@ -1203,7 +1203,9 @@ elif menu == "Admin_Dashboard":
             "Engine": k.provider,
             "Label": k.name,
             "Status": "OPERATIONAL" if k.is_active else "DISABLED",
-            "Signature": k.key_value[:10] + "..."
+            "Prefix": k.key_value[:5] + "...",
+            "Suffix": "..." + k.key_value[-5:],
+            "Length": len(k.key_value.strip())
         } for k in pool_keys])
         st.dataframe(df_pool, use_container_width=True, hide_index=True)
         
