@@ -509,13 +509,17 @@ def auth_page():
                         if existing:
                             st.error("Explicit Warning: User already exists with this email.")
                         else:
-                            role = 'Admin' if new_email == 'admin@vault.ai' else 'User'
-                            new_user = User(email=new_email, hashed_password=hash_password(new_pass), role=role)
-                            session.add(new_user)
-                            session.commit()
-                            st.success("Registered successfully! Please switch to Login tab.")
-                            st.toast("Registered successfully!", icon="🎉")
-                            st.balloons()
+                            try:
+                                role = 'Admin' if new_email == 'admin@vault.ai' else 'User'
+                                new_user = User(email=new_email, hashed_password=hash_password(new_pass), role=role)
+                                session.add(new_user)
+                                session.commit()
+                                st.success("Registered successfully! Please switch to Login tab.")
+                                st.toast("Registered successfully!", icon="🎉")
+                                st.balloons()
+                            except Exception as e:
+                                session.rollback()
+                                st.error(f"Vault Security: Registry Conflict. The database is currently locked by another operation. Please wait 5 seconds and try again. ({e})")
         st.markdown('</div>', unsafe_allow_html=True)
 
 def render_custom_progress(status, progress, eta=None):
