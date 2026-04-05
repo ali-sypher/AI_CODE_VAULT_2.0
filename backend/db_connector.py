@@ -69,37 +69,36 @@ def get_engine():
     db_url = os.getenv("DATABASE_URL", "sqlite:///./code_vault.db")
     return create_engine(db_url, connect_args={"check_same_thread": False} if "sqlite" in db_url else {})
 
-def run_migrations(db_url):
-    """Raw, aggressive migration to ensure columns exist and prevent OperationalError"""
-    if not db_url.startswith("sqlite:///"):
-        return
-    db_path = db_url.split("sqlite:///")[-1]
-    if not os.path.exists(db_path):
-        return
-        
-    import sqlite3
+def run_migrations(engine):
+    """Automatically add missing columns to existing tables with robust logging"""
+    from sqlalchemy import inspect, text
     try:
-        # Give a generous timeout to acquire locks
-        conn = sqlite3.connect(db_path, timeout=10.0)
-        cur = conn.cursor()
-        cur.execute("PRAGMA table_info(users)")
-        cols = [row[1] for row in cur.fetchall()]
-        
-        if cols and 'scan_status' not in cols:
-            cur.execute("ALTER TABLE users ADD COLUMN scan_status VARCHAR(255) DEFAULT ''")
-        if cols and 'scan_progress' not in cols:
-            cur.execute("ALTER TABLE users ADD COLUMN scan_progress INTEGER DEFAULT 0")
+        inspector = inspect(engine)
+        if 'users' in inspector.get_table_names():
+            columns = [c['name'] for c in inspector.get_columns('users')]
+            print(f"VAULT_DEBUG: Current columns in 'users' table: {columns}")
             
-        conn.commit()
-        conn.close()
+            with engine.connect() as conn:
+                if 'scan_status' not in columns:
+                    print("VAULT_DEBUG: Migration -> Adding 'scan_status' column...")
+                    conn.execute(text("ALTER TABLE users ADD COLUMN scan_status VARCHAR(255) DEFAULT ''"))
+                    conn.commit()
+                if 'scan_progress' not in columns:
+                    print("VAULT_DEBUG: Migration -> Adding 'scan_progress' column...")
+                    conn.execute(text("ALTER TABLE users ADD COLUMN scan_progress INTEGER DEFAULT 0"))
+                    conn.commit()
+            print("VAULT_DEBUG: Migration check complete.")
+        else:
+            print("VAULT_DEBUG: 'users' table does not exist yet. Skipping migration.")
     except Exception as e:
-        print("CRITICAL: Migration failed ->", e)
+        print(f"VAULT_DEBUG: CRITICAL Migration error: {e}")
 
 def init_db():
     engine = get_engine()
-    db_url = os.getenv("DATABASE_URL", "sqlite:///./code_vault.db")
-    run_migrations(db_url)
+    # Create all tables first (if they don't exist)
     Base.metadata.create_all(engine)
+    # Then run migrations to add columns to existing ones
+    run_migrations(engine)
     return sessionmaker(bind=engine)()
 
 def bulk_insert_hubs(hubs_data):
