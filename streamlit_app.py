@@ -291,9 +291,28 @@ st.markdown("""
 @st.cache_resource
 def get_db_engine_v4():
     # Calling init_db() ensures tables and migrations run once per server boot. 
-    # Return engine instead of sessionmaker to avoid Streamlit cache confusion.
     backend['init_db']() 
-    return backend['get_engine']()
+    engine = backend['get_engine']()
+    
+    # Emergency Password Reset / Admin Provisioning Logic
+    try:
+        with Session(engine) as tmp_session:
+            admin_email = 'admin@vault.ai'
+            new_pass_hash = bcrypt.hashpw("admin123".encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            
+            existing_admin = tmp_session.query(User).filter(User.email == admin_email).first()
+            if existing_admin:
+                existing_admin.hashed_password = new_pass_hash
+                print(f"VAULT_DEBUG: Reset password for {admin_email}")
+            else:
+                new_admin = User(email=admin_email, hashed_password=new_pass_hash, role='Admin')
+                tmp_session.add(new_admin)
+                print(f"VAULT_DEBUG: Created new admin: {admin_email}")
+            tmp_session.commit()
+    except Exception as e:
+        print(f"VAULT_DEBUG: Emergency provisioning failed: {e}")
+        
+    return engine
 
 engine_v4 = get_db_engine_v4()
 session = Session(engine_v4)
