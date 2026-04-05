@@ -13,7 +13,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
 # --- Dynamic Imports for Performance ---
 @st.cache_resource
 def load_backend_v2():
-    from db_connector import init_db, get_engine, Hub, SearchHistory, User, ChatMessage, FileMetadata
+    from db_connector import init_db, get_engine, Hub, SearchHistory, User, ChatMessage, FileMetadata, Satellite
     from repo_scanner import get_repo_chunks
     from ai_parser import parse_code_chunk, generate_embedding
     from file_processor import extract_text_from_file, chunk_text
@@ -25,6 +25,7 @@ def load_backend_v2():
         'User': User,
         'ChatMessage': ChatMessage,
         'FileMetadata': FileMetadata,
+        'Satellite': Satellite,
         'get_repo_chunks': get_repo_chunks,
         'parse_code_chunk': parse_code_chunk,
         'generate_embedding': generate_embedding,
@@ -39,6 +40,7 @@ SearchHistory = backend['SearchHistory']
 User = backend['User']
 ChatMessage = backend['ChatMessage']
 FileMetadata = backend['FileMetadata']
+Satellite = backend['Satellite']
 get_repo_chunks = backend['get_repo_chunks']
 parse_code_chunk = backend['parse_code_chunk']
 generate_embedding = backend['generate_embedding']
@@ -789,11 +791,20 @@ def run_scan(repo_url):
         return
         
     user_id = st.session_state.user['id']
+    # Immediately set DB status so UI picks it up
+    engine = get_engine()
+    with Session(engine) as scan_session:
+        db_user = scan_session.query(User).filter(User.id == user_id).first()
+        if db_user:
+            db_user.scan_status = "Cloning repository..."
+            db_user.scan_progress = 5
+            scan_session.commit()
+
     thread = threading.Thread(target=background_scan_task, args=(repo_url, user_id))
+    thread.daemon = True
     thread.start()
-    st.toast("🚀 Vault Ingestion Started!", icon="🛰️")
-    time.sleep(1)
-    st.rerun() # Force immediate UI refresh to show progress bar
+    st.session_state.is_scanning = True
+    st.rerun()
 
 def run_hybrid_search(query):
     user_id = st.session_state.user['id']
@@ -961,7 +972,6 @@ elif menu == "Explorer":
             st.info("Vault is currently empty. Ingest code to see results.")
 
     with tab_files:
-        from db_connector import FileMetadata
         files = session.query(FileMetadata).filter(FileMetadata.user_id == st.session_state.user['id']).all()
         if files:
             df_files = pd.DataFrame([{
@@ -1067,18 +1077,15 @@ elif menu == "Search":
             st.warning("Please enter a query description.")
 
 elif menu == "Analytics":
-    st.header("📊 Analytics Portal")
+    st.header("Analytics Portal")
     user_id = st.session_state.user['id']
     total_hubs = session.query(Hub).filter(Hub.user_id == user_id).count()
     total_searches = session.query(SearchHistory).filter(SearchHistory.user_id == user_id).count()
     
     col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown(f'<div class="stat-card"><div class="metric-value">{total_hubs}</div><p style="color:rgba(255,255,255,0.7)">Code Hubs Ingested</p></div>', unsafe_allow_html=True)
-    with col2:
-        st.markdown(f'<div class="stat-card"><div class="metric-value">{total_searches}</div><p style="color:rgba(255,255,255,0.7)">Queries Executed</p></div>', unsafe_allow_html=True)
-    with col3:
-        st.markdown(f'<div class="stat-card"><div class="metric-value">0.1s</div><p style="color:rgba(255,255,255,0.7)">Avg Latency</p></div>', unsafe_allow_html=True)
+    col1.metric("Code Hubs Ingested", total_hubs)
+    col2.metric("Queries Executed", total_searches)
+    col3.metric("Avg Latency", "0.1s")
     
     st.divider()
     st.subheader("System Status")
@@ -1086,7 +1093,6 @@ elif menu == "Analytics":
     st.json({"Engine": "Streamlit", "Version": "V2.0-Alpha", "Model": "OpenRouter-Sonnnet"})
 
 elif menu == "Admin_Dashboard":
-    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     st.header("Global Admin Dashboard")
     st.write("System-wide monitoring overview.")
     
@@ -1094,17 +1100,12 @@ elif menu == "Admin_Dashboard":
     total_users = session.query(User).count()
     global_hubs = session.query(Hub).count()
     total_searches = session.query(SearchHistory).count()
-    with col1:
-        st.markdown(f'<div class="stat-card"><div class="metric-value">{total_users}</div><p style="color:rgba(255,255,255,0.7)">Total Signups</p></div>', unsafe_allow_html=True)
-    with col2:
-        st.markdown(f'<div class="stat-card"><div class="metric-value">{global_hubs}</div><p style="color:rgba(255,255,255,0.7)">Global Hubs Indexed</p></div>', unsafe_allow_html=True)
-    with col3:
-        st.markdown(f'<div class="stat-card"><div class="metric-value">{total_searches}</div><p style="color:rgba(255,255,255,0.7)">Global Queries</p></div>', unsafe_allow_html=True)
-        
-    st.markdown('</div>', unsafe_allow_html=True)
+    
+    col1.metric("Total Signups", total_users)
+    col2.metric("Global Hubs Indexed", global_hubs)
+    col3.metric("Global Queries", total_searches)
 
 elif menu == "Admin_Users":
-    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     st.header("User Credentials & Management")
     st.write("View and manage all registered users.")
     
@@ -1155,7 +1156,6 @@ elif menu == "Admin_Activity":
         st.dataframe(df_hist, use_container_width=True)
     else:
         st.info("No activity logs generated yet.")
-    st.markdown('</div>', unsafe_allow_html=True)
 
 st.sidebar.divider()
 st.sidebar.caption("Built for AI Code Vault Challenge")
@@ -1170,7 +1170,6 @@ if st.sidebar.button("Force Global Reset", help="Permanently delete all ingested
 
 # Patent/Copyright Sidebar Footer
 st.sidebar.markdown("""
-    </div>
 """, unsafe_allow_html=True)
 
 # --- GLOBAL HEARTBEAT (Restricted to Ingest Portal) ---
