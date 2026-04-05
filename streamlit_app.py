@@ -245,10 +245,10 @@ st.markdown("""
 
 # --- DB Helper ---
 @st.cache_resource
-def get_db_session():
+def get_db_session_v2():
     return backend['init_db']()
 
-session = get_db_session()
+session = get_db_session_v2()
 
 # --- Session State Management ---
 if 'authenticated' not in st.session_state:
