@@ -75,11 +75,42 @@ st.markdown("""
         animation: gradientBG 15s ease infinite;
         font-family: 'Inter', sans-serif;
         color: #ffffff;
+        position: relative;
+        overflow: hidden;
+    }
+    .stApp::before, .stApp::after {
+        content: '';
+        position: fixed;
+        width: 60vw;
+        height: 60vw;
+        border-radius: 50%;
+        filter: blur(80px);
+        z-index: -1;
+        opacity: 0.25;
+        animation: float 20s infinite alternate ease-in-out;
+        pointer-events: none;
+    }
+    .stApp::before {
+        background: radial-gradient(circle, #00f2ff, transparent 60%);
+        top: -10%;
+        left: -10%;
+    }
+    .stApp::after {
+        background: radial-gradient(circle, #7000ff, transparent 60%);
+        bottom: -10%;
+        right: -10%;
+        animation-duration: 25s;
+        animation-delay: -5s;
     }
     @keyframes gradientBG {
         0% { background-position: 0% 50%; }
         50% { background-position: 100% 50%; }
         100% { background-position: 0% 50%; }
+    }
+    @keyframes float {
+        0% { transform: translate(0, 0) scale(1); }
+        50% { transform: translate(100px, 50px) scale(1.05); }
+        100% { transform: translate(-50px, 150px) scale(0.95); }
     }
     .main-header {
         font-family: 'Outfit', sans-serif;
