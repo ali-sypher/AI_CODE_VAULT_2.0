@@ -102,6 +102,11 @@ st.markdown("""
         animation-duration: 25s;
         animation-delay: -5s;
     }
+    /* Ensure content stays above the animated background */
+    [data-testid="stAppViewBlockContainer"], .block-container {
+        position: relative !important;
+        z-index: 10 !important;
+    }
     @keyframes gradientBG {
         0% { background-position: 0% 50%; }
         50% { background-position: 100% 50%; }
