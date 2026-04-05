@@ -952,22 +952,27 @@ if menu == "Ingest":
                     st.rerun()
             with col_r2:
                 if st.button("Clear Status", key="clear_status_main", use_container_width=True):
-                    db_current_user.scan_status = ""
-                    db_current_user.scan_progress = 0
-                    session.commit()
+                    _u = session.query(User).filter(User.id == st.session_state.user['id']).first()
+                    if _u:
+                        _u.scan_status = ""
+                        _u.scan_progress = 0
+                        session.commit()
                     st.rerun()
             
             if is_active:
                 if st.button("Abort Operation", key="abort_scan_main", type="primary", use_container_width=True):
-                    db_current_user.scan_status = ""
-                    db_current_user.scan_progress = 0
-                    session.commit()
+                    _u = session.query(User).filter(User.id == st.session_state.user['id']).first()
+                    if _u:
+                        _u.scan_status = ""
+                        _u.scan_progress = 0
+                        session.commit()
                     st.rerun()
 
                 # Real-time auto-refresh: poll DB every 2s while scan is running
                 import time as _time
                 _time.sleep(2)
                 st.rerun()
+
 
 
 elif menu == "Explorer":
