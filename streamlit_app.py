@@ -1252,6 +1252,25 @@ st.sidebar.caption("Built for AI Code Vault Challenge")
 st.sidebar.write("Team:")
 st.sidebar.write("Liba, Nazish, Aleena, Hamza, Ali")
 
+def reset_vault():
+    """Nuclear reset of all database content"""
+    # Delete the database file (SQLite specific)
+    db_path = "./vault_v4.db"
+    if os.path.exists(db_path):
+        try:
+            os.remove(db_path)
+        except:
+            pass
+    # Clear local storage
+    if os.path.exists("./scanner_clones"):
+        try:
+            shutil.rmtree("./scanner_clones")
+        except:
+            pass
+    st.success("The Vault has been completely neutralized. Restarting system...")
+    time.sleep(2)
+    st.rerun()
+
 # --- System Management ---
 st.sidebar.divider()
 st.sidebar.subheader("System Control")
