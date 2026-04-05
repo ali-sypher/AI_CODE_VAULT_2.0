@@ -54,6 +54,15 @@ import threading
 import shutil
 import bcrypt
 import requests
+import extra_streamlit_components as stx
+import uuid
+
+# --- Cookie Management Hub ---
+@st.cache_resource
+def get_cookie_manager():
+    return stx.CookieManager()
+
+cookie_manager = get_cookie_manager()
 
 # --- Multi-Thread Intelligence Management ---
 if 'abort_event' not in st.session_state:
@@ -326,6 +335,21 @@ except Exception:
 # --- Session State Management ---
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
+
+# --- Auto-Handshake: Persistent Session Recovery ---
+if not st.session_state.authenticated:
+    token = cookie_manager.get('vault_session_token')
+    if token:
+        try:
+            user = session.query(User).filter(User.session_token == token).first()
+            if user:
+                st.session_state.authenticated = True
+                st.session_state.user = {"id": user.id, "email": user.email, "role": user.role}
+                st.session_state.menu = "Admin_Dashboard" if user.role == 'Admin' else "Ingest"
+                load_chat_history()
+        except Exception as e:
+            print(f"Auto-Handshake Failure: {e}")
+
 if 'user' not in st.session_state:
     st.session_state.user = None
 if 'messages' not in st.session_state:
@@ -488,6 +512,7 @@ def auth_page():
             with st.form("login_form"):
                 email = st.text_input("Email")
                 password = st.text_input("Password", type="password")
+                remember_me = st.checkbox("Keep me logged in (Persistent Vault)", value=True)
                 submitted = st.form_submit_button("Enter Vault", use_container_width=True)
                 
                 if submitted:
@@ -502,6 +527,15 @@ def auth_page():
                         st.session_state.authenticated = True
                         st.session_state.user = {"id": user.id, "email": user.email, "role": user.role}
                         st.session_state.menu = "Admin_Dashboard" if user.role == 'Admin' else "Ingest"
+                        
+                        # Handle Persistence
+                        if remember_me:
+                            token = str(uuid.uuid4())
+                            user.session_token = token
+                            session.commit()
+                            import datetime as dt
+                            cookie_manager.set('vault_session_token', token, expires_at=datetime.now() + dt.timedelta(days=7))
+                        
                         load_chat_history()
                         st.success(f"Welcome back, {email}!")
                         st.toast("Login Successful!", icon="✅")
@@ -636,8 +670,21 @@ st.sidebar.image("assets/ai_vault_pro_logo.png", use_container_width=True)
 st.sidebar.markdown("<h2 style='text-align: center; color: #00f2ff; font-family: Outfit;'>COMMAND CENTER</h2>", unsafe_allow_html=True)
 st.sidebar.markdown(f"<p style='text-align: center;'>Account: <b>{st.session_state.user['email']}</b><br><small>({st.session_state.user['role']})</small></p>", unsafe_allow_html=True)
 if st.sidebar.button("Logout Access", use_container_width=True):
+    try:
+        # Clear DB Token
+        user_id = st.session_state.user['id']
+        db_user = session.query(User).filter(User.id == user_id).first()
+        if db_user:
+            db_user.session_token = None
+            session.commit()
+    except:
+        pass
+    
+    # Clear Session & Cookies
     st.session_state.authenticated = False
     st.session_state.user = None
+    cookie_manager.delete('vault_session_token')
+    time.sleep(0.5) # Brief pause to allow cookie deletion JS to fire
     st.rerun()
 
 # Navigation Menu State

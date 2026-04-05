@@ -8,9 +8,10 @@ Base = declarative_base()
 class User(Base):
     __tablename__ = 'users'
     id = Column(Integer, primary_key=True, autoincrement=True)
-    email = Column(String(255), unique=True, index=True)
-    hashed_password = Column(String(255))
-    role = Column(String(50), default='User') # 'User' or 'Admin'
+    email = Column(String(120), unique=True, nullable=False)
+    hashed_password = Column(String(120), nullable=False)
+    role = Column(String(20), default='User')
+    session_token = Column(String(255), nullable=True) # New: Persistent session support
     scan_status = Column(String(255), default="")
     scan_progress = Column(Integer, default=0)
 
@@ -76,8 +77,16 @@ def get_engine():
     import shutil
     import tempfile
     
-    # 1. Authoritative Write-Test: Attempt to create a small file in the current directory.
-    # On most cloud environments like Streamlit Cloud, the root app directory is read-only.
+    # 1. Authoritative Cloud & Environment Detection
+    # On Streamlit Cloud, the root repo directory is almost always read-only for SQLite operations.
+    is_cloud = (
+        os.path.exists("/mount/src") or 
+        os.environ.get("STREAMLIT_SERVER_PORT") is not None or 
+        os.environ.get("STREAMLIT_RUNTIME_ENV") is not None or
+        "codespaces" in os.environ.get("USER", "").lower()
+    )
+    
+    # Authoritative Write-Test (Probe)
     test_file = "vault_write_probe.tmp"
     can_write = False
     try:
@@ -88,31 +97,31 @@ def get_engine():
     except Exception:
         can_write = False
         
-    # 2. Forced Fallback: Use /tmp/ if the local directory is read-only.
-    if not can_write:
+    # 2. Nuclear Fallback: If it's Cloud OR it's not writable, we MUST use /tmp/.
+    if is_cloud or not can_write:
         db_path = "/tmp/vault_v4.db"
+        force_tmp = True
     else:
         db_path = "./vault_v4.db"
+        force_tmp = False
     
-    # 3. URL Construction with Override Priority:
-    # We ignore the environment's DATABASE_URL if our write-test fails, 
-    # to prevent Streamlit Cloud from defaulting back to a read-only repo location.
+    # 3. URL Construction with Cloud Overwrite:
+    # If we are in 'force_tmp' mode, we ignore DATABASE_URL from the environment 
+    # because it likely points to a readonly repository location.
     env_db_url = os.getenv("DATABASE_URL")
-    if not can_write or not env_db_url:
+    if force_tmp or not env_db_url:
         protocol = "sqlite:////" if db_path.startswith("/") else "sqlite:///"
         db_url = f"{protocol}{db_path}"
     else:
         db_url = env_db_url
 
     # 4. Mandatory DB Migration:
-    # If we are detouring to /tmp, we MUST copy the existing database 
-    # to avoid starting from a blank state.
-    if not can_write and os.path.exists("./vault_v4.db") and not os.path.exists("/tmp/vault_v4.db"):
+    if force_tmp and os.path.exists("./vault_v4.db") and not os.path.exists("/tmp/vault_v4.db"):
         try:
             shutil.copy2("./vault_v4.db", "/tmp/vault_v4.db")
             print("VAULT_DEBUG: Successfully migrated DB to /tmp for write access.")
-        except Exception as e:
-            print(f"VAULT_DEBUG: DB migration failed: {e}")
+        except Exception:
+            pass
         
     connect_args = {"check_same_thread": False} if "sqlite" in db_url else {}
     if "sqlite" in db_url:
@@ -120,7 +129,7 @@ def get_engine():
         
     engine = create_engine(db_url, connect_args=connect_args)
     
-    # Enable WAL mode for high-concurrency read/write (Prevents "Database Locked" UI freezes)
+    # Enable WAL mode for high-concurrency read/write
     if "sqlite" in db_url:
         from sqlalchemy import event
         @event.listens_for(engine, "connect")

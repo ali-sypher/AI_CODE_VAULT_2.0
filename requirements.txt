@@ -13,3 +13,4 @@ bcrypt
 streamlit-authenticator
 pyyaml
 watchdog
+extra-streamlit-components
