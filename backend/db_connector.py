@@ -65,39 +65,31 @@ class FileMetadata(Base):
     upload_date = Column(String(50))
 
 def get_engine():
-    # SQLite default for easy local testing, but supports MySQL
-    db_url = os.getenv("DATABASE_URL", "sqlite:///./vault_v2.db")
+    # Final rename to force fresh DB on live site
+    db_url = os.getenv("DATABASE_URL", "sqlite:///./vault_v3.db")
     return create_engine(db_url, connect_args={"check_same_thread": False} if "sqlite" in db_url else {})
 
 def run_migrations(engine):
-    """Automatically add missing columns to existing tables with robust logging"""
+    """Automatically add missing columns to any existing tables"""
     from sqlalchemy import inspect, text
     try:
         inspector = inspect(engine)
         if 'users' in inspector.get_table_names():
             columns = [c['name'] for c in inspector.get_columns('users')]
-            print(f"VAULT_DEBUG: Current columns in 'users' table: {columns}")
-            
-            with engine.connect() as conn:
+            print(f"VAULT_DEBUG: users table found with columns: {columns}")
+            with engine.begin() as conn:
                 if 'scan_status' not in columns:
-                    print("VAULT_DEBUG: Migration -> Adding 'scan_status' column...")
+                    print("VAULT_DEBUG: Adding scan_status...")
                     conn.execute(text("ALTER TABLE users ADD COLUMN scan_status VARCHAR(255) DEFAULT ''"))
-                    conn.commit()
                 if 'scan_progress' not in columns:
-                    print("VAULT_DEBUG: Migration -> Adding 'scan_progress' column...")
+                    print("VAULT_DEBUG: Adding scan_progress...")
                     conn.execute(text("ALTER TABLE users ADD COLUMN scan_progress INTEGER DEFAULT 0"))
-                    conn.commit()
-            print("VAULT_DEBUG: Migration check complete.")
-        else:
-            print("VAULT_DEBUG: 'users' table does not exist yet. Skipping migration.")
     except Exception as e:
-        print(f"VAULT_DEBUG: CRITICAL Migration error: {e}")
+        print(f"VAULT_DEBUG: Migration error: {e}")
 
 def init_db():
     engine = get_engine()
-    # Create all tables first (if they don't exist)
     Base.metadata.create_all(engine)
-    # Then run migrations to add columns to existing ones
     run_migrations(engine)
     return sessionmaker(bind=engine)()
 

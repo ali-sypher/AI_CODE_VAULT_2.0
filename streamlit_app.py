@@ -245,10 +245,10 @@ st.markdown("""
 
 # --- DB Helper ---
 @st.cache_resource
-def get_db_session_v2():
+def get_db_session_v3():
     return backend['init_db']()
 
-session = get_db_session_v2()
+session = get_db_session_v3()
 
 # --- Session State Management ---
 if 'authenticated' not in st.session_state:
@@ -433,7 +433,7 @@ def auth_page():
                         user = session.query(User).filter(User.email == email).first()
                     except Exception as db_err:
                         st.error(f"DATABASE DIAGNOSTICS: {str(db_err)}")
-                        st.info(f"Target DB: {os.getenv('DATABASE_URL', './vault_v2.db')}")
+                        st.info(f"Target DB: {os.getenv('DATABASE_URL', './vault_v3.db')}")
                         st.stop()
                         
                     if user and verify_password(password, user.hashed_password):
@@ -466,7 +466,7 @@ def auth_page():
                             existing = session.query(User).filter(User.email == new_email).first()
                         except Exception as db_err:
                             st.error(f"DATABASE DIAGNOSTICS: {str(db_err)}")
-                            st.info(f"Target DB: {os.getenv('DATABASE_URL', './vault_v2.db')}")
+                            st.info(f"Target DB: {os.getenv('DATABASE_URL', './vault_v3.db')}")
                             st.stop()
                             
                         if existing:
