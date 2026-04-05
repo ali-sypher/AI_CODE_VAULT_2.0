@@ -654,6 +654,7 @@ def background_scan_task(repo_url, user_id):
         success_count = 0
 
         with Session(engine) as scan_session:
+            db_user = scan_session.query(User).filter(User.id == user_id).first()
             for i, chunk in enumerate(all_chunks):
                 parsed = parse_code_chunk(chunk)
                 if parsed and parsed.get('hub'):
@@ -669,14 +670,16 @@ def background_scan_task(repo_url, user_id):
                     scan_session.merge(new_hub)
                     success_count += 1
 
-                # Update progress every 5 chunks
-                if i % 5 == 0:
-                    prog = 50 + int(48 * (i + 1) / total)
-                    eta_s = (total - i - 1) * 2
-                    eta_str = f"{eta_s // 60}m {eta_s % 60}s"
-                    _update_db(prog, f"Indexing {i+1}/{total} chunks — ETA {eta_str}")
-
-            scan_session.commit()
+                # Real-time progress: update every single chunk smoothly
+                prog = 50 + int(48 * (i + 1) / total)
+                eta_s = (total - i - 1) * 2
+                eta_str = f"{eta_s // 60}m {eta_s % 60}s"
+                stat = f"Indexing: {i+1}/{total} chunks — ETA {eta_str}"
+                
+                if db_user:
+                    db_user.scan_progress = prog
+                    db_user.scan_status = stat
+                    scan_session.commit() # Push update live to DB
 
         _update_db(100, f"Complete — {success_count} code hubs indexed.")
 
