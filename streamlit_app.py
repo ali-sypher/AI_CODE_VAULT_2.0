@@ -965,7 +965,7 @@ elif menu == "Architect":
             
             # API Call (Robust handling for OpenRouter)
             try:
-                api_key = os.getenv('OPENROUTER_API_KEY', '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')
+                api_key = os.getenv('OPENROUTER_API_KEY', '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')
                 response = requests.post(
                     url="https://openrouter.ai/api/v1/chat/completions",
                     headers={
@@ -973,7 +973,7 @@ elif menu == "Architect":
                         "Content-Type": "application/json"
                     },
                     data=json.dumps({
-                        "model": "anthropic/claude-3.5-sonnet:beta",
+                        "model": "anthropic/claude-3.5-sonnet",
                         "messages": [{"role": "user", "content": final_prompt}]
                     }),
                     timeout=30

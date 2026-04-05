@@ -7,8 +7,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # We strictly use the OpenRouter API based on the user's explicit request
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "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")
-OPENROUTER_MODEL = "anthropic/claude-3.5-sonnet:beta" # Excellent for coding and json mode
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "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")
+OPENROUTER_MODEL = "anthropic/claude-3.5-sonnet" # Updated for stable OpenRouter endpoint
 
 client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
