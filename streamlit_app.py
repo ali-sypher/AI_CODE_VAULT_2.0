@@ -798,8 +798,12 @@ def background_scan_task(repo_url, user_id, abort_event):
                     scan_session.merge(new_hub)
                     success_count += 1
 
-                # Update progress strictly based on index / total
-                if i % 10 == 0 or i == total - 1:
+                # Update progress strictly based on index / total - Throttled to 2s
+                current_time = _time.time()
+                if not hasattr(background_scan_task, 'last_ui_update'):
+                    background_scan_task.last_ui_update = 0
+                
+                if current_time - background_scan_task.last_ui_update > 2.0 or i == total - 1:
                     prog = int((i + 1) / total * 100)
                     eta_s = (total - i - 1) * 2
                     eta_str = f"{eta_s // 60}m {eta_s % 60}s"
@@ -809,6 +813,7 @@ def background_scan_task(repo_url, user_id, abort_event):
                         db_user.scan_progress = prog
                         db_user.scan_status = stat
                         scan_session.commit() # Push update live to DB
+                        background_scan_task.last_ui_update = current_time
 
         if not abort_event.is_set():
             _update_db(100, f"Complete — {success_count} code hubs indexed.")

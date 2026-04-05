@@ -118,7 +118,19 @@ def get_engine():
     if "sqlite" in db_url:
         connect_args["timeout"] = 60 # Handle locks during background scans
         
-    return create_engine(db_url, connect_args=connect_args)
+    engine = create_engine(db_url, connect_args=connect_args)
+    
+    # Enable WAL mode for high-concurrency read/write (Prevents "Database Locked" UI freezes)
+    if "sqlite" in db_url:
+        from sqlalchemy import event
+        @event.listens_for(engine, "connect")
+        def set_sqlite_pragma(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.close()
+            
+    return engine
 
 def run_migrations(engine):
     """Aggressive migration to ensure columns exist"""
