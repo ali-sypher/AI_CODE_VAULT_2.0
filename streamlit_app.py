@@ -324,6 +324,21 @@ def auth_page():
             color: #c9d1d9 !important;
             font-weight: 600 !important;
         }
+        /* Form Submit Button Styling */
+        .stFormSubmitButton button {
+            background: linear-gradient(90deg, rgba(0, 242, 255, 0.1), transparent) !important;
+            color: #00f2ff !important;
+            border: 1px solid rgba(0, 242, 255, 0.4) !important;
+            font-weight: 600 !important;
+            border-radius: 8px !important;
+            transition: all 0.3s ease !important;
+        }
+        .stFormSubmitButton button:hover {
+            background: linear-gradient(90deg, rgba(0, 242, 255, 0.2), rgba(112, 0, 255, 0.1)) !important;
+            border: 1px solid #00f2ff !important;
+            box-shadow: 0 0 15px rgba(0, 242, 255, 0.3) !important;
+            color: #ffffff !important;
+        }
         </style>
         <div class="marquee-container">
             <div class="marquee-content">
