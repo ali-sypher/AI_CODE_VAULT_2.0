@@ -94,20 +94,25 @@ def get_engine():
     else:
         db_path = "./vault_v4.db"
     
-    # Try to copy existing DB over from the read-only repo if it's not and we are in /tmp
+    # 3. URL Construction with Override Priority:
+    # We ignore the environment's DATABASE_URL if our write-test fails, 
+    # to prevent Streamlit Cloud from defaulting back to a read-only repo location.
+    env_db_url = os.getenv("DATABASE_URL")
+    if not can_write or not env_db_url:
+        protocol = "sqlite:////" if db_path.startswith("/") else "sqlite:///"
+        db_url = f"{protocol}{db_path}"
+    else:
+        db_url = env_db_url
+
+    # 4. Mandatory DB Migration:
+    # If we are detouring to /tmp, we MUST copy the existing database 
+    # to avoid starting from a blank state.
     if not can_write and os.path.exists("./vault_v4.db") and not os.path.exists("/tmp/vault_v4.db"):
         try:
             shutil.copy2("./vault_v4.db", "/tmp/vault_v4.db")
-        except Exception:
-            pass
-            
-    # 3. URL Construction: 
-    # Use 4 slashes for absolute paths (sqlite:////tmp/vault_v4.db)
-    # Use 3 slashes for relative paths (sqlite:///./vault_v4.db)
-    db_url = os.getenv("DATABASE_URL")
-    if not db_url:
-        protocol = "sqlite:////" if db_path.startswith("/") else "sqlite:///"
-        db_url = f"{protocol}{db_path}"
+            print("VAULT_DEBUG: Successfully migrated DB to /tmp for write access.")
+        except Exception as e:
+            print(f"VAULT_DEBUG: DB migration failed: {e}")
         
     connect_args = {"check_same_thread": False} if "sqlite" in db_url else {}
     if "sqlite" in db_url:

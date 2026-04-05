@@ -317,6 +317,12 @@ def get_db_engine_v4():
 engine_v4 = get_db_engine_v4()
 session = Session(engine_v4)
 
+# --- Global Session Guard: Resolve PendingRollbackErrors immediately ---
+try:
+    session.execute(sa.text("SELECT 1"))
+except Exception:
+    session.rollback()
+
 # --- Session State Management ---
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
