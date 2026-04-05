@@ -617,28 +617,6 @@ if st.session_state.user['role'] != 'Admin':
     else:
         st.sidebar.info("No query history yet.")
 
-    # --- Sidebar Progress Bar ---
-    try:
-        db_usr = session.query(User).filter(User.id == st.session_state.user['id']).first()
-        if db_usr and db_usr.scan_status:
-            # ONLY show if status explicitly indicates activity
-            is_active = any(keyword in db_usr.scan_status for keyword in ["Indexing", "Cloning", "Processing", "Scraping"])
-            if is_active:
-                st.sidebar.markdown("---")
-                render_custom_progress(db_usr.scan_status, db_usr.scan_progress)
-                if st.sidebar.button("⏹️ HALT INGESTION", key="halt_sidebar", use_container_width=True):
-                    db_usr.scan_status = ""
-                    db_usr.scan_progress = 0
-                    session.commit()
-                    st.rerun()
-            elif db_usr.scan_status == "Complete" or "Halted" in db_usr.scan_status:
-                # Silently purge stale status to prevent ghost UI
-                db_usr.scan_status = ""
-                db_usr.scan_progress = 0
-                session.commit()
-    except:
-        pass
-
 # --- Functions ---
 def background_scan_task(repo_url, user_id):
     """Execution logic in a background thread"""
@@ -1180,16 +1158,14 @@ st.sidebar.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# --- GLOBAL HEARTBEAT POLLER ---
-# If a scan is currently active in the database for the current user,
-# force a rerun after a short delay to update the progress bar in real-time.
-if st.session_state.authenticated:
+# --- GLOBAL HEARTBEAT (Restricted to Ingest Portal) ---
+if st.session_state.authenticated and menu == "Ingest":
     try:
         current_scan_user = session.query(User).filter(User.id == st.session_state.user['id']).first()
         if current_scan_user and current_scan_user.scan_status:
             is_active = any(keyword in current_scan_user.scan_status for keyword in ["Indexing", "Cloning", "Processing", "Scraping"])
             if is_active:
-                time.sleep(2) # Polling rate
+                time.sleep(2) # Polling rate only for Ingest
                 st.rerun()
     except Exception as e:
         pass
