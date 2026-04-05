@@ -70,16 +70,19 @@ st.markdown("""
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700&family=Inter:wght@400;700&display=swap');
     
     .stApp {
-        background: linear-gradient(45deg, #0f0c29, #302b63, #24243e);
-        background-size: 400% 400%;
-        animation: gradientBG 15s ease infinite;
+        background: 
+            radial-gradient(circle at 10% 10%, rgba(0, 242, 255, 0.25) 0%, transparent 50%),
+            radial-gradient(circle at 90% 90%, rgba(112, 0, 255, 0.25) 0%, transparent 50%),
+            linear-gradient(45deg, #0f0c29, #302b63, #24243e);
+        background-size: 200vw 200vh, 200vw 200vh, 400% 400%;
+        animation: orbFloat 25s infinite alternate ease-in-out;
         font-family: 'Inter', sans-serif;
         color: #ffffff;
     }
-    @keyframes gradientBG {
-        0% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
-        100% { background-position: 0% 50%; }
+    @keyframes orbFloat {
+        0% { background-position: 0% 0%, 100% 100%, 0% 50%; }
+        50% { background-position: 30% 40%, 70% 60%, 100% 50%; }
+        100% { background-position: 10% 80%, 90% 20%, 0% 50%; }
     }
     .main-header {
         font-family: 'Outfit', sans-serif;
