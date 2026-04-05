@@ -7,6 +7,9 @@ import time
 from datetime import datetime
 import json
 
+# --- Add backend to path for modular imports ---
+sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
+
 # --- Dynamic Imports for Performance ---
 @st.cache_resource
 def load_backend():
