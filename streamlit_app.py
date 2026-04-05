@@ -646,44 +646,53 @@ if st.session_state.user['role'] != 'Admin':
 
 # --- Functions ---
 def background_scan_task(repo_url, user_id):
-    """Execution logic in a background thread"""
-    st.session_state.is_scanning = True
-    st.session_state.scan_progress = 0
-    st.session_state.scan_status = "Cloning repository..."
-    
-    try:
-        chunks = get_repo_chunks(repo_url)
-        
-        # Initialize database progress
-        engine = get_engine()
-        with Session(engine) as scan_session:
-            db_user = scan_session.query(User).filter(User.id == user_id).first()
-            if db_user:
-                db_user.scan_progress = 10
-                db_user.scan_status = "Cloning repository..."
-                scan_session.commit()
+    """Execution logic in a background thread with real-time DB progress updates"""
+    engine = get_engine()
 
-        st.session_state.scan_progress = 10
-        st.session_state.scan_status = "Cloning repository..."
-        
-        total = len(chunks)
-        if total == 0:
-            with Session(engine) as scan_session:
-                db_user = scan_session.query(User).filter(User.id == user_id).first()
-                if db_user:
-                    db_user.scan_status = "No Python files found."
-                    db_user.scan_progress = 0
-                    scan_session.commit()
-            st.session_state.scan_status = "No Python files found."
-            st.session_state.is_scanning = False
+    def _update_db(prog, status):
+        """Helper: push progress into DB so the polling UI picks it up immediately"""
+        try:
+            with Session(engine) as s:
+                u = s.query(User).filter(User.id == user_id).first()
+                if u:
+                    u.scan_progress = prog
+                    u.scan_status = status
+                    s.commit()
+        except Exception:
+            pass
+
+    try:
+        # --- Phase 1: Clone ---
+        _update_db(5, "Cloning repository...")
+        from repo_scanner import clone_repo, scan_files, extract_functions_via_ast
+        repo_path = clone_repo(repo_url)
+
+        # --- Phase 2: File Discovery ---
+        _update_db(20, "Scanning for Python files...")
+        files = scan_files(repo_path)
+        total_files = len(files)
+
+        if total_files == 0:
+            _update_db(0, "No Python files found in repository.")
             return
-            
-        st.session_state.scan_status = f"Processing {total} code chunks..."
+
+        # --- Phase 3: AST Chunking + Indexing ---
+        all_chunks = []
+        for fi, f in enumerate(files):
+            file_prog = 20 + int(30 * (fi + 1) / total_files)
+            _update_db(file_prog, f"Parsing files... ({fi+1}/{total_files})")
+            all_chunks.extend(extract_functions_via_ast(f))
+
+        total = len(all_chunks)
+        if total == 0:
+            _update_db(0, "No parseable functions found.")
+            return
+
+        _update_db(50, f"Indexing {total} code chunks into Vector DB...")
         success_count = 0
-        
-        # New database session for the background thread
+
         with Session(engine) as scan_session:
-            for i, chunk in enumerate(chunks):
+            for i, chunk in enumerate(all_chunks):
                 parsed = parse_code_chunk(chunk)
                 if parsed and parsed.get('hub'):
                     hub_data = parsed['hub']
@@ -697,53 +706,20 @@ def background_scan_task(repo_url, user_id):
                     )
                     scan_session.merge(new_hub)
                     success_count += 1
-                
-                # Create Satellite entry
-                from db_connector import Satellite, bulk_insert_satellites
-                bulk_insert_satellites([{
-                    "hub_hash": parsed['hub']['hash_key'],
-                    "metrics": parsed['satellite']['metrics']
-                }])
 
-                # Update progress in session state AND DB
-                prog = 10 + int(90 * (i+1)/total)
-                eta_seconds = (total - (i + 1)) * 2 # Est. 2s per chunk
-                eta_str = f"{eta_seconds // 60}m {eta_seconds % 60}s"
-                stat = f"Indexing: {i+1}/{total} chunks. Est. remaining: {eta_str}"
-                
-                # Update DB (important for persistence)
-                if i % 3 == 0: # Update DB more frequently for smoothness
-                    db_user = scan_session.query(User).filter(User.id == user_id).first()
-                    if db_user:
-                        db_user.scan_progress = prog
-                        db_user.scan_status = stat
-                        scan_session.commit()
+                # Update progress every 5 chunks
+                if i % 5 == 0:
+                    prog = 50 + int(48 * (i + 1) / total)
+                    eta_s = (total - i - 1) * 2
+                    eta_str = f"{eta_s // 60}m {eta_s % 60}s"
+                    _update_db(prog, f"Indexing {i+1}/{total} chunks — ETA {eta_str}")
 
-                st.session_state.hubs_indexed = success_count
-                st.session_state.scan_progress = prog
-                st.session_state.scan_status = stat
-            
-            # Final commit and status update
-            db_user = scan_session.query(User).filter(User.id == user_id).first()
-            if db_user:
-                db_user.scan_status = "Complete"
-                db_user.scan_progress = 100
-                scan_session.commit()
-            
-        st.session_state.scan_status = "Vault Ingestion Complete!"
-        st.session_state.scan_message = f"Successfully indexed {success_count} Code Hubs from repo."
-        
+            scan_session.commit()
+
+        _update_db(100, f"Complete — {success_count} code hubs indexed.")
+
     except Exception as e:
-        status_msg = f"Critical Failure: {str(e)}"
-        engine = get_engine()
-        with Session(engine) as scan_session:
-            db_user = scan_session.query(User).filter(User.id == user_id).first()
-            if db_user:
-                db_user.scan_status = status_msg
-                scan_session.commit()
-        st.session_state.scan_status = status_msg
-    
-    st.session_state.is_scanning = False
+        _update_db(0, f"Critical Failure: {str(e)}")
 
 def process_file_content(uploaded_file, user_id):
     """Index a single file's content into the Hub - Supports Multi Format"""
@@ -963,7 +939,8 @@ if menu == "Ingest":
 
     if live_status:
         status_lower = live_status.lower()
-        is_visible = any(k in status_lower for k in ["indexing", "cloning", "processing", "scraping", "complete", "halted"])
+        is_active = any(k in status_lower for k in ["cloning", "parsing", "indexing", "scanning"])
+        is_visible = is_active or any(k in status_lower for k in ["complete", "halted", "critical", "found"])
         
         if is_visible:
             st.markdown("---")
@@ -980,12 +957,18 @@ if menu == "Ingest":
                     session.commit()
                     st.rerun()
             
-            if "indexing" in status_lower or "cloning" in status_lower:
+            if is_active:
                 if st.button("Abort Operation", key="abort_scan_main", type="primary", use_container_width=True):
-                        db_current_user.scan_status = ""
-                        db_current_user.scan_progress = 0
-                        session.commit()
-                        st.rerun()
+                    db_current_user.scan_status = ""
+                    db_current_user.scan_progress = 0
+                    session.commit()
+                    st.rerun()
+
+                # Real-time auto-refresh: poll DB every 2s while scan is running
+                import time as _time
+                _time.sleep(2)
+                st.rerun()
+
 
 elif menu == "Explorer":
     st.markdown(f"""
