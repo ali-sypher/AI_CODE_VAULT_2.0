@@ -429,7 +429,13 @@ def auth_page():
                 submitted = st.form_submit_button("Enter Vault", use_container_width=True)
                 
                 if submitted:
-                    user = session.query(User).filter(User.email == email).first()
+                    try:
+                        user = session.query(User).filter(User.email == email).first()
+                    except Exception as db_err:
+                        st.error(f"DATABASE DIAGNOSTICS: {str(db_err)}")
+                        st.info(f"Target DB: {os.getenv('DATABASE_URL', './vault_v2.db')}")
+                        st.stop()
+                        
                     if user and verify_password(password, user.hashed_password):
                         st.session_state.authenticated = True
                         st.session_state.user = {"id": user.id, "email": user.email, "role": user.role}
@@ -456,7 +462,13 @@ def auth_page():
                     elif new_pass != confirm_pass:
                         st.error("Explicit Warning: Password match error. Passwords do not match!")
                     else:
-                        existing = session.query(User).filter(User.email == new_email).first()
+                        try:
+                            existing = session.query(User).filter(User.email == new_email).first()
+                        except Exception as db_err:
+                            st.error(f"DATABASE DIAGNOSTICS: {str(db_err)}")
+                            st.info(f"Target DB: {os.getenv('DATABASE_URL', './vault_v2.db')}")
+                            st.stop()
+                            
                         if existing:
                             st.error("Explicit Warning: User already exists with this email.")
                         else:
