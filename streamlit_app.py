@@ -865,15 +865,19 @@ def run_hybrid_search(query):
     scored_results.sort(key=lambda x: x['score'], reverse=True)
     top_results = scored_results[:5]
     
-    # Save History
-    new_hist = SearchHistory(
-        query=query,
-        results_json=top_results,
-        timestamp=datetime.now().isoformat(),
-        user_id=user_id
-    )
-    session.add(new_hist)
-    session.commit()
+    # Save History (Wrapped in try-except to avoid crashing the chat on DB lock)
+    try:
+        new_hist = SearchHistory(
+            query=query,
+            results_json=top_results,
+            timestamp=datetime.now().isoformat(),
+            user_id=user_id
+        )
+        session.add(new_hist)
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        print(f"VAULT_DEBUG: Failed to save search history: {e}")
     
     return top_results
 
@@ -1060,10 +1064,14 @@ elif menu == "Architect":
             st.markdown(message["content"])
 
     if prompt := st.chat_input("Enter architectural query..."):
-        # Save and Display User Input
-        user_msg = ChatMessage(user_id=st.session_state.user['id'], role="user", content=prompt, timestamp=datetime.now().isoformat())
-        session.add(user_msg)
-        session.commit()
+        # Save and Display User Input (Wrapped for stability)
+        try:
+            user_msg = ChatMessage(user_id=st.session_state.user['id'], role="user", content=prompt, timestamp=datetime.now().isoformat())
+            session.add(user_msg)
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            print(f"VAULT_DEBUG: Failed to log user message: {e}")
         
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
@@ -1096,9 +1104,13 @@ elif menu == "Architect":
                     
                     if 'choices' in data:
                         full_res = data['choices'][0]['message']['content']
-                        ai_msg = ChatMessage(user_id=st.session_state.user['id'], role="assistant", content=full_res, timestamp=datetime.now().isoformat())
-                        session.add(ai_msg)
-                        session.commit()
+                        try:
+                            ai_msg = ChatMessage(user_id=st.session_state.user['id'], role="assistant", content=full_res, timestamp=datetime.now().isoformat())
+                            session.add(ai_msg)
+                            session.commit()
+                        except Exception as e:
+                            session.rollback()
+                            print(f"VAULT_DEBUG: Failed to log AI response: {e}")
                         st.markdown(full_res)
                         st.session_state.messages.append({"role": "assistant", "content": full_res})
                     else:

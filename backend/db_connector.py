@@ -93,7 +93,11 @@ def get_engine():
             pass
             
     db_url = os.getenv("DATABASE_URL", f"sqlite:///{db_path}")
-    return create_engine(db_url, connect_args={"check_same_thread": False} if "sqlite" in db_url else {})
+    connect_args = {"check_same_thread": False} if "sqlite" in db_url else {}
+    if "sqlite" in db_url:
+        connect_args["timeout"] = 30 # Increase busy_timeout to 30s for concurrent writes
+        
+    return create_engine(db_url, connect_args=connect_args)
 
 def run_migrations(engine):
     """Aggressive migration to ensure columns exist"""
