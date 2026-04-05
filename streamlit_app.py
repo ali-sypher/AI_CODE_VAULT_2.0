@@ -286,12 +286,7 @@ def get_db_session_v4():
     import base64
     from db_connector import KeyPool
     
-    # Check if pool empty or needs a clean sweep (Force wipe on this push for sterile re-bootstrap)
-    if sess.query(KeyPool).count() > 0:
-         # TEMPORARY: Clear faulty assets from memory to allow sterile re-boot
-         sess.query(KeyPool).delete()
-         sess.commit()
-
+    # Only bootstrap if empty, DO NOT wipe existing user keys
     if sess.query(KeyPool).count() == 0:
         assets = [
             ("GROQ", "Z3NrXzk3QmMxQjNmSFEzYmd2REV3ckdFV0dyeWIzRll0VU9rZUpIZDd3UU9TQjZ6VXJqWU1qVko=", "Alpha_Core"),
@@ -1093,6 +1088,7 @@ elif menu == "Architect":
                 providers = []
                 for k in active_groq:
                     providers.append(("GROQ_CORE", "https://api.groq.com/openai/v1/chat/completions", k.key_value, "llama-3.3-70b-versatile"))
+                    providers.append(("GROQ_FALLBACK", "https://api.groq.com/openai/v1/chat/completions", k.key_value, "llama-3.1-8b-instant"))
                 for k in active_or:
                     providers.append(("OR_DEEPSEEK_FREE", "https://openrouter.ai/api/v1/chat/completions", k.key_value, "deepseek/deepseek-chat:free"))
                     providers.append(("OR_GEMINI_FREE", "https://openrouter.ai/api/v1/chat/completions", k.key_value, "google/gemini-2.0-flash-exp:free"))
