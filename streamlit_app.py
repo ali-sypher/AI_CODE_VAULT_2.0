@@ -658,11 +658,7 @@ def reset_vault():
     st.rerun()
 
 # --- MAIN UI ---
-col_logo, col_text = st.columns([1, 8])
-with col_logo:
-    st.image(r"C:\Users\Ali Aliyyan\.gemini\antigravity\brain\f10956f1-2a7c-4353-8e8f-678d5e4bd8ab\ai_vault_pro_logo_1775332828537.png", width=80)
-with col_text:
-    st.markdown('<div class="main-header">AI CODE VAULT V2.0</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">AI CODE VAULT V2.0</div>', unsafe_allow_html=True)
 
 # Persistent Background Progress UI
 if st.session_state.is_scanning:
