@@ -5,7 +5,6 @@ import os
 import sys
 import time
 from datetime import datetime
-from sklearn.preprocessing import TfidfVectorizer
 
 # --- Add backend to path for modular imports ---
 sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
