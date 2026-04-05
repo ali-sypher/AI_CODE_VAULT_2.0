@@ -13,7 +13,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
 # --- Dynamic Imports for Performance ---
 @st.cache_resource
 def load_backend_v2():
-    from db_connector import init_db, get_engine, Hub, SearchHistory, User, ChatMessage, FileMetadata, Satellite
+    from db_connector import init_db, get_engine, Hub, SearchHistory, User, ChatMessage, FileMetadata, Satellite, KeyPool
     from repo_scanner import get_repo_chunks
     from ai_parser import parse_code_chunk, generate_embedding
     from file_processor import extract_text_from_file, chunk_text
@@ -1229,11 +1229,8 @@ elif menu == "Admin_Users":
                 st.rerun()
         else:
             st.error("Please select a valid user.")
-            
-    st.markdown('</div>', unsafe_allow_html=True)
 
 elif menu == "Admin_Activity":
-    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     st.header("Global Activity Logs")
     st.write("Live feed of all global queries and user searches.")
     
