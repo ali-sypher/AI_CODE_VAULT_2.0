@@ -520,17 +520,20 @@ def auth_page():
 
 def render_custom_progress(status, progress, eta=None):
     """Cyberpunk-themed interactive progress bar with game-style flair"""
-    import random
-    game_messages = [
-        "Analyzing directory structure...",
-        "Processing code vectors...",
-        "Running ingestion module...",
-        "Synchronizing search index...",
-        "Validating semantic metadata...",
-        "Scanning for logical entrypoints...",
-        "Executing stream indexing..."
-    ]
-    random_msg = random.choice(game_messages) if progress < 100 else "Process Complete."
+    # Reduce flickering by consistently picking a message for each phase
+    status_lower = status.lower()
+    if "cloning" in status_lower:
+        random_msg = "Cloning Network Source..."
+    elif "scanning" in status_lower or "searching" in status_lower:
+        random_msg = "Analyzing Directory Structure..."
+    elif "parsing" in status_lower:
+        random_msg = "Executing AST Logic..."
+    elif "indexing" in status_lower or "vector" in status_lower:
+        random_msg = "Synchronizing Vector Store..."
+    elif progress >= 100:
+        random_msg = "Process Complete."
+    else:
+        random_msg = "Analyzing metadata..."
     
     progress_html = f"""
     <div style="background: rgba(0, 242, 255, 0.03); border: 1px solid rgba(0, 242, 255, 0.1); border-radius: 8px; padding: 20px; margin: 15px 0; font-family: 'Inter', sans-serif;">

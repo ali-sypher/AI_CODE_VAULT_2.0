@@ -26,7 +26,22 @@ def clone_repo(repo_url, target_dir="./data/repos"):
         shutil.rmtree(repo_path, ignore_errors=True)
     
     print(f"Cloning {repo_url} into {repo_path}...")
-    Repo.clone_from(repo_url, repo_path)
+    import subprocess
+    try:
+        # Using subprocess for more control and timeout, with depth=1 to speed up
+        subprocess.run(
+            ["git", "clone", "--depth", "1", repo_url, repo_path],
+            check=True,
+            timeout=120,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+    except subprocess.TimeoutExpired:
+        raise Exception(f"Git clone timed out after 120 seconds. Repository may be too large or network is slow.")
+    except subprocess.CalledProcessError as e:
+        error_msg = e.stderr.decode() if e.stderr else "Unknown Git error"
+        raise Exception(f"Git clone failed: {error_msg}")
+    
     return repo_path
 
 def scan_files(repo_path, ext=".py"):
