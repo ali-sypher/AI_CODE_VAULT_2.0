@@ -142,35 +142,37 @@ def get_engine():
     return engine
 
 def run_migrations(engine):
-    """Aggressive migration to ensure columns exist"""
-    from sqlalchemy import inspect, text
-    try:
-        inspector = inspect(engine)
-        # Migration for users table columns
-        if 'users' in inspector.get_table_names():
-            columns = [c['name'] for c in inspector.get_columns('users')]
-            with engine.begin() as conn:
-                if 'scan_status' not in columns:
-                    conn.execute(text("ALTER TABLE users ADD COLUMN scan_status VARCHAR(255) DEFAULT ''"))
-                if 'scan_progress' not in columns:
-                    conn.execute(text("ALTER TABLE users ADD COLUMN scan_progress INTEGER DEFAULT 0"))
-                if 'session_token' not in columns:
-                    conn.execute(text("ALTER TABLE users ADD COLUMN session_token VARCHAR(255)"))
-                    print("VAULT_DEBUG: Migrated 'session_token' column.")
-        
-        # Direct Schema Enforcement for KeyPool (Ensures availability on all deployments)
+    """Iron-Clad Raw SQL migrations to ensure columns exist regardless of inspector state"""
+    from sqlalchemy import text
+    
+    # We use raw SQL with try-except to 'Brute Force' the columns into existence.
+    # If the column already exists, the command fails harmlessly.
+    with engine.begin() as conn:
+        # 1. session_token (New: Persistent Auth)
         try:
-            from sqlalchemy.orm import Session
-            KeyPool.__table__.create(engine)
-            print("VAULT_DEBUG: Force-provisioned KeyPool schema.")
+            conn.execute(text("ALTER TABLE users ADD COLUMN session_token VARCHAR(255)"))
+            print("VAULT_DEBUG: Forced migration of 'session_token'")
         except Exception:
-            # Table already exists or creation failed, proceed to metadata fail-safe
-            try:
-                Base.metadata.create_all(engine)
-            except:
-                pass
-    except Exception as e:
-        print(f"VAULT_DEBUG: Critical Migration Failure: {e}")
+            pass
+            
+        # 2. scan_status (Background Ops)
+        try:
+            conn.execute(text("ALTER TABLE users ADD COLUMN scan_status VARCHAR(255) DEFAULT ''"))
+        except Exception:
+            pass
+
+        # 3. scan_progress (Background Ops)
+        try:
+            conn.execute(text("ALTER TABLE users ADD COLUMN scan_progress INTEGER DEFAULT 0"))
+        except Exception:
+            pass
+            
+    # Metadata Fail-safe
+    try:
+        from sqlalchemy.orm import Session
+        Base.metadata.create_all(engine)
+    except:
+        pass
 
 def init_db():
     engine = get_engine()

@@ -296,32 +296,33 @@ st.markdown("""
 # --- DB Initializer (Cached to avoid re-running on every page render) ---
 @st.cache_resource
 def get_db_engine_v4():
-    # Calling init_db() ensures tables and migrations run once per server boot. 
-    backend['init_db']() 
+    # We cache the engine, but we will run migrations globally outside the cache to ensure persistence.
     engine = backend['get_engine']()
-    
-    # Emergency Password Reset / Admin Provisioning Logic
-    try:
-        with Session(engine) as tmp_session:
-            admin_email = 'admin@vault.ai'
-            new_pass_hash = bcrypt.hashpw("admin123".encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-            
-            existing_admin = tmp_session.query(User).filter(User.email == admin_email).first()
-            if existing_admin:
-                existing_admin.hashed_password = new_pass_hash
-                print(f"VAULT_DEBUG: Reset password for {admin_email}")
-            else:
-                new_admin = User(email=admin_email, hashed_password=new_pass_hash, role='Admin')
-                tmp_session.add(new_admin)
-                print(f"VAULT_DEBUG: Created new admin: {admin_email}")
-            tmp_session.commit()
-    except Exception as e:
-        print(f"VAULT_DEBUG: Emergency provisioning failed: {e}")
-        
     return engine
 
 engine_v4 = get_db_engine_v4()
 session = Session(engine_v4)
+
+# --- Proactive Schema Pulse: Ensure persistence even if cache is 'sticky' ---
+try:
+    backend['run_migrations'](engine_v4)
+except Exception as pulse_err:
+    print(f"VAULT_DEBUG: Schema pulse check bypassed/failed: {pulse_err}")
+
+# --- Emergency Password Reset / Admin Provisioning Logic ---
+try:
+    admin_email = 'admin@vault.ai'
+    new_pass_hash = bcrypt.hashpw("admin123".encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    existing_admin = session.query(User).filter(User.email == admin_email).first()
+    if existing_admin:
+        existing_admin.hashed_password = new_pass_hash
+    else:
+        new_admin = User(email=admin_email, hashed_password=new_pass_hash, role='Admin')
+        session.add(new_admin)
+    session.commit()
+except Exception as e:
+    session.rollback()
+    print(f"VAULT_DEBUG: Emergency provisioning failed: {e}")
 
 # --- Global Session Guard: Resolve PendingRollbackErrors immediately ---
 try:
