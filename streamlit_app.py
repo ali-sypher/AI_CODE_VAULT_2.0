@@ -1092,7 +1092,7 @@ elif menu == "Architect":
                 
                 providers = []
                 for k in active_groq:
-                    providers.append(("GROQ_CORE", "https://api.groq.com/openai/v1/chat/completions", k.key_value, "llama3-8b-8192"))
+                    providers.append(("GROQ_CORE", "https://api.groq.com/openai/v1/chat/completions", k.key_value, "llama-3.3-70b-versatile"))
                 for k in active_or:
                     providers.append(("OR_DEEPSEEK_FREE", "https://openrouter.ai/api/v1/chat/completions", k.key_value, "deepseek/deepseek-chat:free"))
                     providers.append(("OR_GEMINI_FREE", "https://openrouter.ai/api/v1/chat/completions", k.key_value, "google/gemini-2.0-flash-exp:free"))
@@ -1131,8 +1131,16 @@ elif menu == "Architect":
                             st.caption(f"Asset Connection Error {p_name}: {str(e)}")
                             continue
                 
-                if not success and providers:
-                    st.error("Neural Interface Exhausted: All Admin-supplied assets failed validation.")
+                
+                # Ultimate Zero-API RAG Fallback
+                if not success:
+                    st.warning("All External Neural Providers Failed. Activating Local RAG Mode.")
+                    fallback_msg = f"**Local Vault Architect (Offline Mode) - RAG Context:**\n\nI could not reach any external AI providers, but here is the data I retrieved from your Vault for this query:\n\n{context_text}"
+                    ai_msg = ChatMessage(user_id=st.session_state.user['id'], role="assistant", content=fallback_msg, timestamp=datetime.now().isoformat())
+                    session.add(ai_msg)
+                    session.commit()
+                    st.markdown(fallback_msg)
+                    st.session_state.messages.append({"role": "assistant", "content": fallback_msg})
 
 elif menu == "Search":
     st.markdown(f"""
@@ -1230,7 +1238,7 @@ elif menu == "Admin_Dashboard":
             if target_key:
                 st.write(f"Testing {target_key.provider}...")
                 p_url = "https://api.groq.com/openai/v1/chat/completions" if target_key.provider == "GROQ" else "https://openrouter.ai/api/v1/chat/completions"
-                p_model = "llama3-8b-8192" if target_key.provider == "GROQ" else "deepseek/deepseek-chat:free"
+                p_model = "llama-3.3-70b-versatile" if target_key.provider == "GROQ" else "deepseek/deepseek-chat:free"
                 headers = {"Authorization": f"Bearer {target_key.key_value}", "Content-Type": "application/json"}
                 if "openrouter" in p_url: headers.update({"HTTP-Referer": "https://aicodevault.streamlit.app", "X-Title": "AI Code Vault Pro"})
                 try:
