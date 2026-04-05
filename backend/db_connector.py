@@ -65,24 +65,21 @@ class FileMetadata(Base):
     upload_date = Column(String(50))
 
 def get_engine():
-    # Final rename to force fresh DB on live site
-    db_url = os.getenv("DATABASE_URL", "sqlite:///./vault_v3.db")
+    # Final reset for live app testing
+    db_url = os.getenv("DATABASE_URL", "sqlite:///./vault_v4.db")
     return create_engine(db_url, connect_args={"check_same_thread": False} if "sqlite" in db_url else {})
 
 def run_migrations(engine):
-    """Automatically add missing columns to any existing tables"""
+    """Aggressive migration to ensure columns exist"""
     from sqlalchemy import inspect, text
     try:
         inspector = inspect(engine)
         if 'users' in inspector.get_table_names():
             columns = [c['name'] for c in inspector.get_columns('users')]
-            print(f"VAULT_DEBUG: users table found with columns: {columns}")
             with engine.begin() as conn:
                 if 'scan_status' not in columns:
-                    print("VAULT_DEBUG: Adding scan_status...")
                     conn.execute(text("ALTER TABLE users ADD COLUMN scan_status VARCHAR(255) DEFAULT ''"))
                 if 'scan_progress' not in columns:
-                    print("VAULT_DEBUG: Adding scan_progress...")
                     conn.execute(text("ALTER TABLE users ADD COLUMN scan_progress INTEGER DEFAULT 0"))
     except Exception as e:
         print(f"VAULT_DEBUG: Migration error: {e}")

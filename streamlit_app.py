@@ -12,7 +12,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
 
 # --- Dynamic Imports for Performance ---
 @st.cache_resource
-def load_backend():
+def load_backend_v2():
     from db_connector import init_db, get_engine, Hub, SearchHistory, User, ChatMessage, FileMetadata
     from repo_scanner import get_repo_chunks
     from ai_parser import parse_code_chunk, generate_embedding
@@ -32,7 +32,7 @@ def load_backend():
         'chunk_text': chunk_text
     }
 
-backend = load_backend()
+backend = load_backend_v2()
 get_engine = backend['get_engine']
 Hub = backend['Hub']
 SearchHistory = backend['SearchHistory']
@@ -245,10 +245,10 @@ st.markdown("""
 
 # --- DB Helper ---
 @st.cache_resource
-def get_db_session_v3():
+def get_db_session_v4():
     return backend['init_db']()
 
-session = get_db_session_v3()
+session = get_db_session_v4()
 
 # --- Session State Management ---
 if 'authenticated' not in st.session_state:
@@ -433,7 +433,7 @@ def auth_page():
                         user = session.query(User).filter(User.email == email).first()
                     except Exception as db_err:
                         st.error(f"DATABASE DIAGNOSTICS: {str(db_err)}")
-                        st.info(f"Target DB: {os.getenv('DATABASE_URL', './vault_v3.db')}")
+                        st.info(f"Target DB: {os.getenv('DATABASE_URL', './vault_v4.db')}")
                         st.stop()
                         
                     if user and verify_password(password, user.hashed_password):
@@ -466,7 +466,7 @@ def auth_page():
                             existing = session.query(User).filter(User.email == new_email).first()
                         except Exception as db_err:
                             st.error(f"DATABASE DIAGNOSTICS: {str(db_err)}")
-                            st.info(f"Target DB: {os.getenv('DATABASE_URL', './vault_v3.db')}")
+                            st.info(f"Target DB: {os.getenv('DATABASE_URL', './vault_v4.db')}")
                             st.stop()
                             
                         if existing:
