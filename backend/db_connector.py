@@ -93,8 +93,11 @@ def run_migrations(engine):
         
         # Immediate creation of key_pool if missing (Base.metadata.create_all is the primary, this is the fail-safe)
         if 'key_pool' not in inspector.get_table_names():
-            Base.metadata.tables['key_pool'].create(engine)
-            print("VAULT_DEBUG: Generated missing key_pool table.")
+            try:
+                KeyPool.__table__.create(engine)
+                print("VAULT_DEBUG: Generated missing key_pool table via __table__.")
+            except:
+                Base.metadata.create_all(engine)
     except Exception as e:
         print(f"VAULT_DEBUG: Migration error: {e}")
 
