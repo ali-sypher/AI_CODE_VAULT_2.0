@@ -470,7 +470,7 @@ def auth_page():
                         user = session.query(User).filter(User.email == email).first()
                     except Exception as db_err:
                         st.error(f"DATABASE DIAGNOSTICS: {str(db_err)}")
-                        st.info(f"Target DB: {os.getenv('DATABASE_URL', './vault_v4.db')}")
+                        st.info(f"Target DB: {str(session.bind.url)}")
                         st.stop()
                         
                     if user and verify_password(password, user.hashed_password):
@@ -503,7 +503,7 @@ def auth_page():
                             existing = session.query(User).filter(User.email == new_email).first()
                         except Exception as db_err:
                             st.error(f"DATABASE DIAGNOSTICS: {str(db_err)}")
-                            st.info(f"Target DB: {os.getenv('DATABASE_URL', './vault_v4.db')}")
+                            st.info(f"Target DB: {str(session.bind.url)}")
                             st.stop()
                             
                         if existing:

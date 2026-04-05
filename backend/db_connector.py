@@ -74,28 +74,44 @@ class KeyPool(Base):
 
 def get_engine():
     import shutil
-    # Detect cloud environment
-    is_cloud = os.path.exists("/mount/src") or os.environ.get("STREAMLIT_SERVER_PORT") or os.environ.get("STREAMLIT_RUNTIME_ENV")
+    import tempfile
     
-    # Safely handle read-only filesystem environments (e.g. Streamlit cloud /app or deployed github repo)
+    # 1. Authoritative Write-Test: Attempt to create a small file in the current directory.
+    # On most cloud environments like Streamlit Cloud, the root app directory is read-only.
+    test_file = "vault_write_probe.tmp"
+    can_write = False
     try:
-        is_writable = os.access(".", os.W_OK)
+        with open(test_file, 'w') as f:
+            f.write('probe')
+        os.remove(test_file)
+        can_write = True
     except Exception:
-        is_writable = False
+        can_write = False
         
-    db_path = "/tmp/vault_v4.db" if (is_cloud or not is_writable) else "./vault_v4.db"
+    # 2. Forced Fallback: Use /tmp/ if the local directory is read-only.
+    if not can_write:
+        db_path = "/tmp/vault_v4.db"
+    else:
+        db_path = "./vault_v4.db"
     
-    # Try to copy existing DB over to volatile temp path if it doesn't exist there
-    if (is_cloud or not is_writable) and os.path.exists("./vault_v4.db") and not os.path.exists("/tmp/vault_v4.db"):
+    # Try to copy existing DB over from the read-only repo if it's not and we are in /tmp
+    if not can_write and os.path.exists("./vault_v4.db") and not os.path.exists("/tmp/vault_v4.db"):
         try:
             shutil.copy2("./vault_v4.db", "/tmp/vault_v4.db")
         except Exception:
             pass
             
-    db_url = os.getenv("DATABASE_URL", f"sqlite:///{db_path}")
+    # 3. URL Construction: 
+    # Use 4 slashes for absolute paths (sqlite:////tmp/vault_v4.db)
+    # Use 3 slashes for relative paths (sqlite:///./vault_v4.db)
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        protocol = "sqlite:////" if db_path.startswith("/") else "sqlite:///"
+        db_url = f"{protocol}{db_path}"
+        
     connect_args = {"check_same_thread": False} if "sqlite" in db_url else {}
     if "sqlite" in db_url:
-        connect_args["timeout"] = 60 # Increase busy_timeout to 60s for concurrent writes
+        connect_args["timeout"] = 60 # Handle locks during background scans
         
     return create_engine(db_url, connect_args=connect_args)
 
