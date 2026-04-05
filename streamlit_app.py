@@ -914,21 +914,31 @@ if menu == "Ingest":
     # Real-time Progress Display in Ingest Tab
     db_current_user = session.query(User).filter(User.id == st.session_state.user['id']).first()
     if db_current_user and db_current_user.scan_status:
-        is_active = any(keyword in db_current_user.scan_status for keyword in ["Indexing", "Cloning", "Processing", "Scraping"])
-        if is_active:
+        # Professional keywords for active/completed visibility
+        status_lower = db_current_user.scan_status.lower()
+        is_visible = any(k in status_lower for k in ["indexing", "cloning", "processing", "scraping", "complete", "halted"])
+        
+        if is_visible:
             st.markdown("---")
             render_custom_progress(db_current_user.scan_status, db_current_user.scan_progress)
             
             col_r1, col_r2 = st.columns([1,1])
             with col_r1:
-                if st.button("Refresh View", key="refresh_monitor_btn_main", use_container_width=True):
+                if st.button("Refresh Monitor", key="refresh_monitor_btn_main", use_container_width=True):
                     st.rerun()
             with col_r2:
-                if st.button("Emergency Abort", key="abort_scan_main", type="primary", use_container_width=True):
+                if st.button("Clear Status", key="clear_status_main", use_container_width=True):
                     db_current_user.scan_status = ""
                     db_current_user.scan_progress = 0
                     session.commit()
                     st.rerun()
+            
+            if "indexing" in status_lower or "cloning" in status_lower:
+                if st.button("Abort Operation", key="abort_scan_main", type="primary", use_container_width=True):
+                        db_current_user.scan_status = ""
+                        db_current_user.scan_progress = 0
+                        session.commit()
+                        st.rerun()
 
 elif menu == "Explorer":
     st.markdown(f"""
@@ -1170,14 +1180,15 @@ if st.sidebar.button("Force Global Reset", help="Permanently delete all ingested
 st.sidebar.markdown("""
 """, unsafe_allow_html=True)
 
-# --- GLOBAL HEARTBEAT (Restricted to Ingest Portal) ---
 if st.session_state.authenticated and menu == "Ingest":
     try:
         current_scan_user = session.query(User).filter(User.id == st.session_state.user['id']).first()
         if current_scan_user and current_scan_user.scan_status:
-            is_active = any(keyword in current_scan_user.scan_status for keyword in ["Indexing", "Cloning", "Processing", "Scraping"])
-            if is_active:
-                time.sleep(2) # Polling rate only for Ingest
+            status_lower = current_scan_user.scan_status.lower()
+            # ONLY poll if actively moving (Complete is static, no need to poll)
+            is_actually_moving = any(k in status_lower for k in ["indexing", "cloning", "processing", "scraping"])
+            if is_actually_moving:
+                time.sleep(2) 
                 st.rerun()
-    except Exception as e:
+    except:
         pass
