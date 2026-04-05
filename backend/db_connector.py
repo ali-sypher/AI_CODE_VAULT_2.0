@@ -64,6 +64,14 @@ class FileMetadata(Base):
     size = Column(Integer) # in bytes
     upload_date = Column(String(50))
 
+class KeyPool(Base):
+    __tablename__ = 'key_pool'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    provider = Column(String(50)) # 'GROQ', 'OPENROUTER'
+    key_value = Column(String(255))
+    name = Column(String(100), default="Primary")
+    is_active = Column(Integer, default=1) # 1=Active, 0=Disabled
+
 def get_engine():
     # Final reset for live app testing
     db_url = os.getenv("DATABASE_URL", "sqlite:///./vault_v4.db")
