@@ -53,6 +53,40 @@ import bcrypt
 from streamlit_lottie import st_lottie
 import requests
 
+def get_cyber_icon(name):
+    icons = {
+        "vault": '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L3 7V17L12 22L21 17V7L12 2Z" stroke="#00f2ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 22V12" stroke="#00f2ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 7L12 12L3 7" stroke="#00f2ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 12L12 2" stroke="#00f2ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+        "search": '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="8" stroke="#7000ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 21L16.65 16.65" stroke="#7000ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+        "ingest": '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="#00f2ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 8L12 3L7 8" stroke="#00f2ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 3V15" stroke="#00f2ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+        "chat": '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 11.5C21.0034 12.8199 20.6951 14.1219 20.1 15.3C19.3944 16.7112 18.3098 17.8992 16.9674 18.7303C15.6251 19.5614 14.0705 19.9985 12.48 20C10.9401 20.0067 9.42187 19.5836 8.09999 18.77L3 20.5L4.73 15.4C3.91639 14.0781 3.49333 12.5599 3.5 11.02C3.50149 9.42951 3.9386 7.87487 4.76971 6.53249C5.60081 5.1901 6.78877 4.10558 8.2 3.4C9.37808 2.80489 10.6801 2.49656 12 2.5H12.5C14.7164 2.6644 16.7958 3.61905 18.3512 5.17441C19.9066 6.72978 20.8612 8.80916 21 11.025V11.5Z" stroke="#7000ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    }
+    return f'<div style="display:flex; align-items:center; gap:10px;">{icons.get(name, "")}</div>'
+
+def render_satellite_card(metrics):
+    """Scientific visualization of code metadata"""
+    if not metrics: return ""
+    loc = metrics.get('lines_of_code', 0)
+    compl = metrics.get('complexity_estimate', 'N/A')
+    params = ", ".join(metrics.get('parameters', [])) if metrics.get('parameters') else "None"
+    
+    card_html = f"""
+    <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin: 15px 0;">
+        <div style="background: rgba(0, 242, 255, 0.05); border: 1px solid rgba(0, 242, 255, 0.1); border-radius: 8px; padding: 12px; text-align: center;">
+            <div style="color: #00f2ff; font-size: 0.7rem; text-transform: uppercase;">Lines of Code</div>
+            <div style="color: #ffffff; font-size: 1.2rem; font-weight: 700;">{loc}</div>
+        </div>
+        <div style="background: rgba(112, 0, 255, 0.05); border: 1px solid rgba(112, 0, 255, 0.1); border-radius: 8px; padding: 12px; text-align: center;">
+            <div style="color: #7000ff; font-size: 0.7rem; text-transform: uppercase;">Complexity</div>
+            <div style="color: #ffffff; font-size: 1.2rem; font-weight: 700;">{compl}</div>
+        </div>
+        <div style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 12px; text-align: center;">
+            <div style="color: rgba(255,255,255,0.7); font-size: 0.7rem; text-transform: uppercase;">Parameters</div>
+            <div style="color: #ffffff; font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis;">{params[:20]}...</div>
+        </div>
+    </div>
+    """
+    return card_html
+
 # --- Page Configuration ---
 st.set_page_config(
     page_title="AI Code Vault 2.0",
@@ -651,6 +685,13 @@ def background_scan_task(repo_url, user_id):
                     scan_session.merge(new_hub)
                     success_count += 1
                 
+                # Create Satellite entry
+                from db_connector import Satellite, bulk_insert_satellites
+                bulk_insert_satellites([{
+                    "hub_hash": parsed['hub']['hash_key'],
+                    "metrics": parsed['satellite']['metrics']
+                }])
+
                 # Update progress in session state AND DB
                 prog = 10 + int(90 * (i+1)/total)
                 eta_seconds = (total - (i + 1)) * 2 # Est. 2s per chunk
@@ -850,7 +891,7 @@ if db_current_user and db_current_user.scan_status and db_current_user.scan_stat
 # --- Dynamic Menu Content ---
 
 if menu == "Ingest":
-    st.header("🌐 Scan Repository")
+    st.markdown(f"{get_cyber_icon('ingest')} <h1 style='display:inline;'>Scan Repository</h1>", unsafe_allow_html=True)
     st.write("Feed the Vault by scanning a GitHub repository or uploading files directly.")
     
     tab_git, tab_file = st.tabs(["🌐 GitHub Scan", "📂 Direct Upload"])
@@ -891,35 +932,57 @@ if menu == "Ingest":
                 st.rerun()
 
 elif menu == "Explorer":
-    st.header("📁 Vault Explorer")
-    st.write("A verified table of functions, classes, and code hubs.")
+    st.markdown(f"{get_cyber_icon('vault')} <h1 style='display:inline;'>Vault Explorer 2.0</h1>", unsafe_allow_html=True)
+    st.write("Quantum Database Visualization of logical Code Hubs and Satellite Metrics.")
     
-    # Query all hubs for current user
-    user_id = st.session_state.user['id']
-    hubs = session.query(Hub).filter(Hub.user_id == user_id).all()
+    tab_hubs, tab_files = st.tabs(["🧩 Code Hubs", "📚 File Library"])
     
-    if hubs:
-        df_hubs = pd.DataFrame([{
-            "ID": h.id,
-            "Name": h.hash_key,
-            "Type": h.type,
-            "File Path": h.file_path.split("repos")[-1] if "repos" in h.file_path else h.file_path,
-            "Code Size (Chars)": len(h.code_snippet) if h.code_snippet else 0
-        } for h in hubs])
+    with tab_hubs:
+        # Query all hubs for current user
+        user_id = st.session_state.user['id']
+        hubs = session.query(Hub).filter(Hub.user_id == user_id).all()
         
-        st.dataframe(df_hubs, use_container_width=True, hide_index=True)
-        
-        selected_name = st.selectbox("Select a Hub to preview code:", df_hubs['Name'].unique())
-        if selected_name:
-            selected_hub = session.query(Hub).filter(Hub.hash_key == selected_name, Hub.user_id == user_id).first()
-            if selected_hub:
-                st.subheader(f"Snippet: {selected_hub.hash_key}")
-                st.code(selected_hub.code_snippet, language='python')
-    else:
-        st.info("No data ingested yet. Go to 'Scan Repository' to begin.")
+        if hubs:
+            df_hubs = pd.DataFrame([{
+                "Hub ID": h.id,
+                "Logical Name": h.hash_key,
+                "Archetype": h.type,
+                "Relative Path": h.file_path.split("repos")[-1] if "repos" in h.file_path else h.file_path
+            } for h in hubs])
+            
+            st.dataframe(df_hubs, use_container_width=True, hide_index=True)
+            
+            sel_hub = st.selectbox("Select a Hub to analyze logical metrics:", df_hubs['Logical Name'].unique())
+            if sel_hub:
+                hub_obj = session.query(Hub).filter(Hub.hash_key == sel_hub, Hub.user_id == user_id).first()
+                sat_obj = session.query(Satellite).filter(Satellite.hub_hash == sel_hub).first()
+                
+                if hub_obj:
+                    st.markdown("---")
+                    st.subheader(f"Satellite Intelligence: {sel_hub}")
+                    if sat_obj:
+                        st.markdown(render_satellite_card(sat_obj.metrics), unsafe_allow_html=True)
+                    
+                    st.code(hub_obj.code_snippet, language='python')
+        else:
+            st.info("Vault is currently empty. Ingest code to see results.")
+
+    with tab_files:
+        from db_connector import FileMetadata
+        files = session.query(FileMetadata).filter(FileMetadata.user_id == st.session_state.user['id']).all()
+        if files:
+            df_files = pd.DataFrame([{
+                "Filename": f.filename,
+                "Type": f.file_type,
+                "Size (KB)": f.size // 1024,
+                "Timestamp": f.upload_date
+            } for f in files])
+            st.dataframe(df_files, use_container_width=True, hide_index=True)
+        else:
+            st.info("No documents or files have been indexed yet.")
 
 elif menu == "Architect":
-    st.header("🧠 AI Architect Chat")
+    st.markdown(f"{get_cyber_icon('chat')} <h1 style='display:inline;'>AI Architect Chat</h1>", unsafe_allow_html=True)
     st.write("Consult the Vault's neural network about your codebase.")
     
     for message in st.session_state.messages:
@@ -983,7 +1046,7 @@ elif menu == "Architect":
                 st.error(f"Connection Error: {str(e)}")
 
 elif menu == "Search":
-    st.header("🔍 Neural Search")
+    st.markdown(f"{get_cyber_icon('search')} <h1 style='display:inline;'>Neural Search</h1>", unsafe_allow_html=True)
     st.write("Quantum retrieval over the code graph through hybrid vector indexing.")
     
     search_q = st.text_input("Enter semantic query (e.g., 'API validation logic')", key="neural_search_input")
