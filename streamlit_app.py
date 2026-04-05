@@ -284,11 +284,14 @@ st.markdown("""
 
 # --- DB Initializer (Cached to avoid re-running on every page render) ---
 @st.cache_resource
-def get_db_factory_v4():
-    return backend['init_db']()
+def get_db_engine_v4():
+    # Calling init_db() ensures tables and migrations run once per server boot. 
+    # Return engine instead of sessionmaker to avoid Streamlit cache confusion.
+    backend['init_db']() 
+    return backend['get_engine']()
 
-Factory = get_db_factory_v4()
-session = Factory()
+engine_v4 = get_db_engine_v4()
+session = Session(engine_v4)
 
 # --- Session State Management ---
 if 'authenticated' not in st.session_state:
