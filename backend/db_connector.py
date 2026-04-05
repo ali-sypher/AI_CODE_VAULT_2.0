@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, JSON
+from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, JSON, inspect, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 Base = declarative_base()
@@ -69,9 +69,21 @@ def get_engine():
     db_url = os.getenv("DATABASE_URL", "sqlite:///./code_vault.db")
     return create_engine(db_url, connect_args={"check_same_thread": False} if "sqlite" in db_url else {})
 
+def run_migrations(engine):
+    """Automatically add missing columns to existing tables"""
+    inspector = inspect(engine)
+    columns = [c['name'] for c in inspector.get_columns('users')]
+    
+    with engine.begin() as conn:
+        if 'scan_status' not in columns:
+            conn.execute(text("ALTER TABLE users ADD COLUMN scan_status VARCHAR(255) DEFAULT ''"))
+        if 'scan_progress' not in columns:
+            conn.execute(text("ALTER TABLE users ADD COLUMN scan_progress INTEGER DEFAULT 0"))
+
 def init_db():
     engine = get_engine()
     Base.metadata.create_all(engine)
+    run_migrations(engine)
     return sessionmaker(bind=engine)()
 
 def bulk_insert_hubs(hubs_data):
