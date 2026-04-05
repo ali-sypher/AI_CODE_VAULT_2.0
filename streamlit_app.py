@@ -808,10 +808,15 @@ def run_scan(repo_url):
             db_user.scan_progress = 5
             scan_session.commit()
 
+    st.session_state.scan_status = "Cloning repository..."
+    st.session_state.scan_progress = 5
+    st.session_state.is_scanning = True
+
+    # Critical: Restore thread start
     thread = threading.Thread(target=background_scan_task, args=(repo_url, user_id))
     thread.daemon = True
     thread.start()
-    st.session_state.is_scanning = True
+
     st.rerun()
 
 def run_hybrid_search(query):
@@ -919,16 +924,24 @@ if menu == "Ingest":
         st.success(st.session_state.scan_message)
         st.session_state.scan_message = ""
         
-    # Real-time Progress Display in Ingest Tab
+    # Real-time Progress Display (Prioritize Session State for Instant Response, Fallback to DB)
     db_current_user = session.query(User).filter(User.id == st.session_state.user['id']).first()
-    if db_current_user and db_current_user.scan_status:
-        # Professional keywords for active/completed visibility
-        status_lower = db_current_user.scan_status.lower()
+    
+    live_status = st.session_state.get('scan_status', '')
+    live_prog = st.session_state.get('scan_progress', 0)
+    
+    # If session is empty but DB has data (persistent recovery), use DB
+    if not live_status and db_current_user and db_current_user.scan_status:
+        live_status = db_current_user.scan_status
+        live_prog = db_current_user.scan_progress
+
+    if live_status:
+        status_lower = live_status.lower()
         is_visible = any(k in status_lower for k in ["indexing", "cloning", "processing", "scraping", "complete", "halted"])
         
         if is_visible:
             st.markdown("---")
-            render_custom_progress(db_current_user.scan_status, db_current_user.scan_progress)
+            render_custom_progress(live_status, live_prog)
             
             col_r1, col_r2 = st.columns([1,1])
             with col_r1:
