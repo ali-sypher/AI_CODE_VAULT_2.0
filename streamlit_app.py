@@ -1141,6 +1141,20 @@ elif menu == "Analytics":
     col2.metric("Queries Executed", total_searches)
     col3.metric("Avg Latency", "0.1s")
     
+
+elif menu == "Admin_Dashboard":
+    st.header("Global Admin Dashboard")
+    st.write("System-wide monitoring overview.")
+    
+    col1, col2, col3 = st.columns(3)
+    total_users = session.query(User).count()
+    global_hubs = session.query(Hub).count()
+    total_searches = session.query(SearchHistory).count()
+    
+    col1.metric("Total Signups", total_users)
+    col2.metric("Global Hubs Indexed", global_hubs)
+    col3.metric("Global Queries", total_searches)
+
     st.divider()
     st.subheader("Neural Interface Management (Global Key Pool)")
     st.write("Supply and maintain the global API asset pool shared by all users.")
@@ -1184,19 +1198,6 @@ elif menu == "Analytics":
             st.rerun()
     else:
         st.info("Global asset pool is empty. Supply credentials to enable high-fidelity consultations.")
-
-elif menu == "Admin_Dashboard":
-    st.header("Global Admin Dashboard")
-    st.write("System-wide monitoring overview.")
-    
-    col1, col2, col3 = st.columns(3)
-    total_users = session.query(User).count()
-    global_hubs = session.query(Hub).count()
-    total_searches = session.query(SearchHistory).count()
-    
-    col1.metric("Total Signups", total_users)
-    col2.metric("Global Hubs Indexed", global_hubs)
-    col3.metric("Global Queries", total_searches)
 
 elif menu == "Admin_Users":
     st.header("User Credentials & Management")
