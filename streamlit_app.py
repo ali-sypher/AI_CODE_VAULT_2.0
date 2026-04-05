@@ -948,35 +948,42 @@ elif menu == "Architect":
 
         st.markdown('<div class="ai-msg">', unsafe_allow_html=True)
         with st.spinner("Consulting the Vault Embeddings..."):
-                # RAG Logic
-                context_results = run_hybrid_search(prompt)
-                context_text = "\n\n".join([f"File: {r['name']}\nCode:\n{r['snippet']}" for r in context_results])
+            # RAG Logic
+            context_results = run_hybrid_search(prompt)
+            context_text = "\n\n".join([f"File: {r['name']}\nCode:\n{r['snippet']}" for r in context_results])
+            
+            final_prompt = f"""You are the AI Architect for this codebase. 
+            Use the following retrieved code snippets to answer the user's question.
+            If the code doesn't contain the answer, say you don't know based on the current vault.
+            
+            Context:
+            {context_text}
+            
+            Question: {prompt}
+            
+            Answer:"""
+            
+            # API Call (Robust handling for OpenRouter)
+            try:
+                api_key = os.getenv('OPENROUTER_API_KEY', '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')
+                response = requests.post(
+                    url="https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    data=json.dumps({
+                        "model": "anthropic/claude-3.5-sonnet:beta",
+                        "messages": [{"role": "user", "content": final_prompt}]
+                    }),
+                    timeout=30
+                )
+                data = response.json()
                 
-                final_prompt = f"""You are the AI Architect for this codebase. 
-                Use the following retrieved code snippets to answer the user's question.
-                If the code doesn't contain the answer, say you don't know based on the current vault.
-                
-                Context:
-                {context_text}
-                
-                Question: {prompt}
-                
-                Answer:"""
-                
-                # API Call (using same logic as parser)
-                try:
-                    response = requests.post(
-                        url="https://openrouter.ai/api/v1/chat/completions",
-                        headers={
-                            "Authorization": f"Bearer {os.getenv('OPENROUTER_API_KEY')}",
-                            "Content-Type": "application/json"
-                        },
-                        data=json.dumps({
-                            "model": "anthropic/claude-3.5-sonnet:beta",
-                            "messages": [{"role": "user", "content": final_prompt}]
-                        })
-                    )
-                    data = response.json()
+                if 'error' in data:
+                    st.error(f"Vault Architect API Error: {data['error'].get('message', 'Unknown OpenRouter Error')}")
+                    if 'code' in data['error']: st.caption(f"Error Code: {data['error']['code']}")
+                elif 'choices' in data:
                     full_response = data['choices'][0]['message']['content']
                     
                     # Save AI Message to DB & Session
@@ -987,8 +994,10 @@ elif menu == "Architect":
                     st.markdown(full_response)
                     st.session_state.messages.append({"role": "assistant", "content": full_response})
                     st.toast("Response Decoded", icon="🧠")
-                except Exception as e:
-                    st.markdown(f"Architect Error: {str(e)}")
+                else:
+                    st.error(f"Unexpected API Response Structure. Data: {str(data)[:200]}...")
+            except Exception as e:
+                st.markdown(f"Architect Connection Error: {str(e)}")
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
