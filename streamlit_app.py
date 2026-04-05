@@ -414,14 +414,13 @@ def auth_page():
         st.markdown('</div>', unsafe_allow_html=True)
 
 # --- Sidebar Navigation ---
-st.sidebar.image("assets/ai_vault_pro_logo.png", use_container_width=True)
-st.sidebar.markdown("<h2 style='text-align: center; color: #00f2ff; font-family: Outfit;'>COMMAND CENTER</h2>", unsafe_allow_html=True)
-
 if not st.session_state.authenticated:
     auth_page()
     st.stop()
 
 # --- Authenticated Sidebar Content ---
+st.sidebar.image("assets/ai_vault_pro_logo.png", use_container_width=True)
+st.sidebar.markdown("<h2 style='text-align: center; color: #00f2ff; font-family: Outfit;'>COMMAND CENTER</h2>", unsafe_allow_html=True)
 st.sidebar.markdown(f"<p style='text-align: center;'>👤 Logged in as: <b>{st.session_state.user['email']}</b><br><small>({st.session_state.user['role']})</small></p>", unsafe_allow_html=True)
 if st.sidebar.button("🔓 Logout", use_container_width=True):
     st.session_state.authenticated = False
