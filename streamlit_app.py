@@ -735,11 +735,17 @@ def background_scan_task(repo_url, user_id, abort_event):
         
         from repo_scanner import clone_repo, scan_files, extract_functions_via_ast
         repo_path = clone_repo(repo_url)
-        if abort_event.is_set(): return
+        if abort_event.is_set(): 
+            _update_db(0, "Halted by User.")
+            return
 
         # --- Phase 2: File Discovery ---
         _update_db(0, "Preparing: Scanning multi-language codebases...")
         files = scan_files(repo_path)
+        if abort_event.is_set(): 
+            _update_db(0, "Halted by User.")
+            return
+            
         total_files = len(files)
 
         if total_files == 0:
@@ -762,6 +768,10 @@ def background_scan_task(repo_url, user_id, abort_event):
             return
 
         _update_db(0, f"Initializing Ingestion of {total} code chunks...")
+        if abort_event.is_set(): 
+            _update_db(0, "Halted by User.")
+            return
+
         success_count = 0
 
         with Session(engine) as scan_session:
@@ -800,7 +810,10 @@ def background_scan_task(repo_url, user_id, abort_event):
                         db_user.scan_status = stat
                         scan_session.commit() # Push update live to DB
 
-        _update_db(100, f"Complete — {success_count} code hubs indexed.")
+        if not abort_event.is_set():
+            _update_db(100, f"Complete — {success_count} code hubs indexed.")
+        else:
+            _update_db(0, "Halted by User.")
 
     except Exception as e:
         _update_db(0, f"Critical Failure: {str(e)}")
@@ -1037,9 +1050,13 @@ if menu == "Ingest":
             
             if st.button("Abort Operation", key="abort_scan_main", type="primary", use_container_width=True):
                 st.session_state.abort_event.set() # Trigger kill-switch
+                st.session_state.is_scanning = False # Instant UI reset
+                st.session_state.scan_status = ""
+                st.session_state.scan_progress = 0
+                
                 _u = session.query(User).filter(User.id == st.session_state.user['id']).first()
                 if _u:
-                    _u.scan_status = ""
+                    _u.scan_status = "Halted by User."
                     _u.scan_progress = 0
                     session.commit()
                 st.rerun()
