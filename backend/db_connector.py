@@ -189,6 +189,29 @@ def run_migrations(engine):
     except:
         pass
 
+def get_schema_diagnostics(engine):
+    """Absolute structural verification for the Iron-Clad initialization loop."""
+    from sqlalchemy import inspect
+    import os
+    
+    results = {
+        "tables": [],
+        "file_path": str(engine.url).replace("sqlite:////", "/").replace("sqlite:///", ""),
+        "file_exists": False,
+        "file_size": 0
+    }
+    
+    try:
+        inspector = inspect(engine)
+        results["tables"] = inspector.get_table_names()
+        if os.path.exists(results["file_path"]):
+            results["file_exists"] = True
+            results["file_size"] = os.path.getsize(results["file_path"])
+    except Exception as e:
+        print(f"VAULT_DEBUG: Diagnostics Error: {e}")
+        
+    return results
+
 def init_db():
     engine = get_engine()
     Base.metadata.create_all(engine)

@@ -9,16 +9,19 @@ from datetime import datetime
 # --- Add backend to path for modular imports ---
 sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
 
-# --- Dynamic Imports for Performance ---
+# --- Dynamic Imports for Performance (V3 CACHE KILL) ---
 @st.cache_resource
-def load_backend_v2():
-    from db_connector import init_db, get_engine, Hub, SearchHistory, User, ChatMessage, FileMetadata, Satellite, KeyPool
+def load_backend_v3():
+    from db_connector import init_db, get_engine, Hub, SearchHistory, User, ChatMessage, FileMetadata, Satellite, KeyPool, Base, run_migrations, get_schema_diagnostics
     from repo_scanner import get_repo_chunks
     from ai_parser import parse_code_chunk, generate_embedding
     from file_processor import extract_text_from_file, chunk_text
     return {
         'init_db': init_db,
         'get_engine': get_engine,
+        'Base': Base,
+        'run_migrations': run_migrations,
+        'get_schema_diagnostics': get_schema_diagnostics,
         'Hub': Hub,
         'SearchHistory': SearchHistory,
         'User': User,
@@ -33,7 +36,7 @@ def load_backend_v2():
         'chunk_text': chunk_text
     }
 
-backend = load_backend_v2()
+backend = load_backend_v3()
 get_engine = backend['get_engine']
 Hub = backend['Hub']
 SearchHistory = backend['SearchHistory']
@@ -107,8 +110,8 @@ def render_satellite_card(metrics):
 
 # --- Page Configuration ---
 st.set_page_config(
-    page_title="AI Code Vault 2.0",
-               page_icon=None,
+    page_title="AI CODE VAULT 2.0 [SYNC_ACTIVE_V5]",
+    page_icon="🧬",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -302,13 +305,25 @@ def get_db_engine_v4():
 engine_v4 = get_db_engine_v4()
 session = Session(engine_v4)
 
-# --- Proactive Schema Pulse: Ensure persistence even if cache is 'sticky' ---
-try:
-    backend['run_migrations'](engine_v4)
-except Exception as pulse_err:
-    print(f"VAULT_DEBUG: Schema pulse check bypassed/failed: {pulse_err}")
+# --- IRON-CLAD VERIFICATION HANDSHAKE ---
+def verify_integrity():
+    with st.spinner("🚀 SYNCHRONIZING NEURAL VAULT... (Safety Handshake)"):
+        for attempt in range(3):
+            diag = backend['get_schema_diagnostics'](engine_v4)
+            if "users" in diag['tables']:
+                return True
+            # Attempt repair
+            backend['Base'].metadata.create_all(engine_v4)
+            backend['run_migrations'](engine_v4)
+            time.sleep(1)
+        return False
 
-# --- Emergency Password Reset / Admin Provisioning Logic ---
+if not verify_integrity():
+    st.error("❌ VAULT STRUCTURAL FAILURE: Could not verify database integrity.")
+    st.info(f"Diagnostics: {backend['get_schema_diagnostics'](engine_v4)}")
+    st.stop()
+
+# --- Emergency Password Reset / Admin Provisioning ---
 try:
     admin_email = 'admin@vault.ai'
     new_pass_hash = bcrypt.hashpw("admin123".encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
