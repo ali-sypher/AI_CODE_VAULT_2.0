@@ -15,8 +15,10 @@ def clone_repo(repo_url, target_dir="./data/repos"):
     if is_cloud or not is_writable:
         target_dir = "/tmp/repos"
         
-    repo_name = repo_url.rstrip('/').split('/')[-1].replace('.git', '')
-    repo_path = os.path.abspath(os.path.join(target_dir, repo_name))
+    # Use a stable hash of the URL to avoid path collisions and ensure consistency
+    import hashlib
+    repo_hash = hashlib.md5(repo_url.encode()).hexdigest()[:12]
+    repo_path = os.path.abspath(os.path.join(target_dir, f"repo_{repo_hash}"))
     
     if not os.path.exists(target_dir):
         os.makedirs(target_dir, exist_ok=True)
@@ -27,20 +29,32 @@ def clone_repo(repo_url, target_dir="./data/repos"):
     
     print(f"Cloning {repo_url} into {repo_path}...")
     import subprocess
+    
+    # 1. Force Headless Git: Disable interactive prompts for credentials (prevents "hang" at 0%)
+    git_env = os.environ.copy()
+    git_env["GIT_TERMINAL_PROMPT"] = "0"
+    git_env["GIT_SSH_COMMAND"] = "ssh -o BatchMode=yes"
+
     try:
-        # Using subprocess for more control and timeout, with depth=1 to speed up
-        subprocess.run(
+        # Using subprocess with depth=1 and fixed environment
+        result = subprocess.run(
             ["git", "clone", "--depth", "1", repo_url, repo_path],
+            env=git_env,
             check=True,
             timeout=120,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE
         )
     except subprocess.TimeoutExpired:
-        raise Exception(f"Git clone timed out after 120 seconds. Repository may be too large or network is slow.")
+        raise Exception("Git Clone Interrupted: Operation timed out after 120s. Repository may be too large or the network is throttled.")
     except subprocess.CalledProcessError as e:
-        error_msg = e.stderr.decode() if e.stderr else "Unknown Git error"
-        raise Exception(f"Git clone failed: {error_msg}")
+        # Capture precise error from the git terminal (e.g., Repository Not Found)
+        err = e.stderr.decode() if e.stderr else "Unknown Git error"
+        if "Authentication failed" in err or "not found" in err.lower():
+            raise Exception(f"Git Access Denied: {err.strip()}")
+        raise Exception(f"Git Error: {err.strip()}")
+    except Exception as e:
+        raise Exception(f"Repository Ingestion Engine Error: {str(e)}")
     
     return repo_path
 
