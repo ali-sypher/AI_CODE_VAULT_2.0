@@ -66,7 +66,7 @@ class FileMetadata(Base):
 
 def get_engine():
     # SQLite default for easy local testing, but supports MySQL
-    db_url = os.getenv("DATABASE_URL", "sqlite:///./code_vault.db")
+    db_url = os.getenv("DATABASE_URL", "sqlite:///./vault_v2.db")
     return create_engine(db_url, connect_args={"check_same_thread": False} if "sqlite" in db_url else {})
 
 def run_migrations(engine):
