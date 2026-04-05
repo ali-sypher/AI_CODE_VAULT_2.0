@@ -55,6 +55,10 @@ import shutil
 import bcrypt
 import requests
 
+# --- Multi-Thread Intelligence Management ---
+if 'abort_event' not in st.session_state:
+    st.session_state.abort_event = threading.Event()
+
 def get_cyber_icon(name):
     icons = {
         "vault": '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L3 7V17L12 22L21 17V7L12 2Z" stroke="#00f2ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 22V12" stroke="#00f2ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 7L12 12L3 7" stroke="#00f2ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 12L12 2" stroke="#00f2ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -582,6 +586,12 @@ st.sidebar.info("Enterprise Protocol: All API credentials are pre-configured in 
 
 # --- Sidebar Activity Portal ---
 if st.session_state.user['role'] != 'Admin':
+    # Session Guard: Resolve PendingRollbackErrors immediately
+    try:
+        session.execute(sa.text("SELECT 1"))
+    except Exception:
+        session.rollback()
+
     st.sidebar.divider()
     st.sidebar.subheader("Recent Technical Activity")
     user_id = st.session_state.user['id']
@@ -607,7 +617,7 @@ if st.session_state.user['role'] != 'Admin':
         st.sidebar.info("System activity logs are currenty empty.")
 
 # --- Functions ---
-def background_scan_task(repo_url, user_id):
+def background_scan_task(repo_url, user_id, abort_event):
     """Execution logic in a background thread with real-time DB progress updates"""
     engine = get_engine()
 
@@ -626,8 +636,11 @@ def background_scan_task(repo_url, user_id):
     try:
         # --- Phase 1: Clone ---
         _update_db(5, "Cloning repository...")
+        if abort_event.is_set(): return
+        
         from repo_scanner import clone_repo, scan_files, extract_functions_via_ast
         repo_path = clone_repo(repo_url)
+        if abort_event.is_set(): return
 
         # --- Phase 2: File Discovery ---
         _update_db(20, "Scanning for Python files...")
@@ -641,8 +654,12 @@ def background_scan_task(repo_url, user_id):
         # --- Phase 3: AST Chunking + Indexing ---
         all_chunks = []
         for fi, f in enumerate(files):
+            if abort_event.is_set(): 
+                _update_db(0, "Halted by User.")
+                return
             file_prog = 20 + int(30 * (fi + 1) / total_files)
-            _update_db(file_prog, f"Parsing files... ({fi+1}/{total_files})")
+            if fi % 5 == 0: # Throttle parse updates
+                _update_db(file_prog, f"Parsing files... ({fi+1}/{total_files})")
             all_chunks.extend(extract_functions_via_ast(f))
 
         total = len(all_chunks)
@@ -656,6 +673,13 @@ def background_scan_task(repo_url, user_id):
         with Session(engine) as scan_session:
             db_user = scan_session.query(User).filter(User.id == user_id).first()
             for i, chunk in enumerate(all_chunks):
+                if abort_event.is_set():
+                    if db_user:
+                        db_user.scan_status = "Halted by User."
+                        db_user.scan_progress = 0
+                        scan_session.commit()
+                    return
+
                 parsed = parse_code_chunk(chunk)
                 if parsed and parsed.get('hub'):
                     hub_data = parsed['hub']
@@ -670,16 +694,17 @@ def background_scan_task(repo_url, user_id):
                     scan_session.merge(new_hub)
                     success_count += 1
 
-                # Real-time progress: update every single chunk smoothly
-                prog = 50 + int(48 * (i + 1) / total)
-                eta_s = (total - i - 1) * 2
-                eta_str = f"{eta_s // 60}m {eta_s % 60}s"
-                stat = f"Indexing: {i+1}/{total} chunks — ETA {eta_str}"
-                
-                if db_user:
-                    db_user.scan_progress = prog
-                    db_user.scan_status = stat
-                    scan_session.commit() # Push update live to DB
+                # Update progress every 5 chunks to keep UI responsive but stable
+                if i % 5 == 0 or i == total - 1:
+                    prog = 50 + int(48 * (i + 1) / total)
+                    eta_s = (total - i - 1) * 2
+                    eta_str = f"{eta_s // 60}m {eta_s % 60}s"
+                    stat = f"Indexing: {i+1}/{total} chunks — ETA {eta_str}"
+                    
+                    if db_user:
+                        db_user.scan_progress = prog
+                        db_user.scan_status = stat
+                        scan_session.commit() # Push update live to DB
 
         _update_db(100, f"Complete — {success_count} code hubs indexed.")
 
@@ -774,10 +799,11 @@ def run_scan(repo_url):
 
     st.session_state.scan_status = "Cloning repository..."
     st.session_state.scan_progress = 5
+    st.session_state.abort_event.clear() # Reset kill-switch
     st.session_state.is_scanning = True
 
     # Critical: Restore thread start
-    thread = threading.Thread(target=background_scan_task, args=(repo_url, user_id))
+    thread = threading.Thread(target=background_scan_task, args=(repo_url, user_id, st.session_state.abort_event))
     thread.daemon = True
     thread.start()
 
@@ -907,36 +933,33 @@ if menu == "Ingest":
         is_active = any(k in status_lower for k in ["cloning", "parsing", "indexing", "scanning"])
         is_visible = is_active or any(k in status_lower for k in ["complete", "halted", "critical", "found"])
         
-        if is_visible:
+        if is_active:
             st.markdown("---")
             render_custom_progress(live_status, live_prog)
             
-            col_r1, col_r2 = st.columns([1,1])
-            with col_r1:
-                if st.button("Refresh Monitor", key="refresh_monitor_btn_main", use_container_width=True):
-                    st.rerun()
-            with col_r2:
-                if st.button("Clear Status", key="clear_status_main", use_container_width=True):
-                    _u = session.query(User).filter(User.id == st.session_state.user['id']).first()
-                    if _u:
-                        _u.scan_status = ""
-                        _u.scan_progress = 0
-                        session.commit()
-                    st.rerun()
-            
-            if is_active:
-                if st.button("Abort Operation", key="abort_scan_main", type="primary", use_container_width=True):
-                    _u = session.query(User).filter(User.id == st.session_state.user['id']).first()
-                    if _u:
-                        _u.scan_status = ""
-                        _u.scan_progress = 0
-                        session.commit()
-                    st.rerun()
-
-                # Real-time auto-refresh: poll DB every 2s while scan is running
-                import time as _time
-                _time.sleep(2)
+            if st.button("Abort Operation", key="abort_scan_main", type="primary", use_container_width=True):
+                st.session_state.abort_event.set() # Trigger kill-switch
+                _u = session.query(User).filter(User.id == st.session_state.user['id']).first()
+                if _u:
+                    _u.scan_status = ""
+                    _u.scan_progress = 0
+                    session.commit()
                 st.rerun()
+
+            # Real-time auto-refresh: poll DB every 2s while scan is running
+            import time as _time
+            _time.sleep(2)
+            st.rerun()
+        elif "complete" in status_lower or "halted" in status_lower:
+            st.toast(live_status, icon="✅" if "complete" in status_lower else "🛑")
+            _u = session.query(User).filter(User.id == st.session_state.user['id']).first()
+            if _u:
+                _u.scan_status = ""
+                _u.scan_progress = 0
+                session.commit()
+            import time as _time
+            _time.sleep(1) # Brief pause so they can read the toast
+            st.rerun()
 
 
 

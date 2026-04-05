@@ -74,7 +74,10 @@ class KeyPool(Base):
 
 def get_engine():
     # Final reset for live app testing
-    db_url = os.getenv("DATABASE_URL", "sqlite:///./vault_v4.db")
+    is_cloud = os.path.exists("/mount/src") or os.environ.get("STREAMLIT_SERVER_PORT")
+    db_path = "/tmp/vault_v4.db" if is_cloud else "./vault_v4.db"
+    
+    db_url = os.getenv("DATABASE_URL", f"sqlite:///{db_path}")
     return create_engine(db_url, connect_args={"check_same_thread": False} if "sqlite" in db_url else {})
 
 def run_migrations(engine):
