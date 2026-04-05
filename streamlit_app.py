@@ -523,30 +523,83 @@ def auth_page():
         st.markdown('</div>', unsafe_allow_html=True)
 
 def render_custom_progress(status, progress, eta=None):
-    """Cyberpunk-themed interactive progress bar with game-style flair"""
-    # Simplified logic: Keep the message focused on the Ingestion process
-    if progress < 100:
-        random_msg = "Feeding Neural Search Index..."
-    else:
-        random_msg = "Process Complete."
+    """Neural Stream Terminal: A live, non-traditional data ingestion visualization"""
+    # Define a set of active-looking log messages for the terminal
+    import random
+    log_prefixes = ["DATA_FEED", "NEURAL_LINK", "VECTOR_SYNC", "AST_PARSE", "HUB_WRITE"]
+    active_prefix = random.choice(log_prefixes)
     
-    progress_html = f"""
-    <div style="background: rgba(0, 242, 255, 0.03); border: 1px solid rgba(0, 242, 255, 0.1); border-radius: 8px; padding: 20px; margin: 15px 0; font-family: 'Inter', sans-serif;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 12px; align-items: center;">
-            <span style="color: #00f2ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; font-size: 0.85rem;">System Ingestion Status</span>
-            <span style="color: #ffffff; font-weight: 600; font-size: 1rem;">{progress}%</span>
+    # CSS for the 'Live' feel
+    terminal_css = """
+    <style>
+    @keyframes neural-pulse {
+        0% { box-shadow: 0 0 5px rgba(0, 242, 255, 0.2); }
+        50% { box-shadow: 0 0 20px rgba(0, 242, 255, 0.5); }
+        100% { box-shadow: 0 0 5px rgba(0, 242, 255, 0.2); }
+    }
+    .neural-terminal {
+        background: #0d1117;
+        border: 1px solid #00f2ff;
+        border-radius: 8px;
+        padding: 20px;
+        font-family: 'Courier New', monospace;
+        color: #00f2ff;
+        animation: neural-pulse 2s infinite;
+        margin-bottom: 20px;
+    }
+    .terminal-header {
+        border-bottom: 1px solid rgba(0, 242, 255, 0.3);
+        padding-bottom: 10px;
+        margin-bottom: 15px;
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.8rem;
+        letter-spacing: 2px;
+    }
+    .terminal-feed {
+        height: 120px;
+        overflow-y: hidden;
+        font-size: 0.9rem;
+        display: flex;
+        flex-direction: column-reverse;
+    }
+    .feed-line {
+        margin-bottom: 5px;
+        opacity: 0.8;
+    }
+    .active-line {
+        color: #ffffff;
+        font-weight: bold;
+        border-left: 3px solid #00f2ff;
+        padding-left: 10px;
+    }
+    </style>
+    """
+    
+    terminal_html = f"""
+    {terminal_css}
+    <div class="neural-terminal">
+        <div class="terminal-header">
+            <span>NEURAL STREAM CORE v2.0</span>
+            <span>INDEX_INTEGRITY: {progress}%</span>
         </div>
-        <div style="background: rgba(255, 255, 255, 0.05); border-radius: 4px; height: 8px; overflow: hidden;">
-            <div style="width: {progress}%; height: 100%; background: #00f2ff; transition: width 0.5s ease;"></div>
+        <div class="terminal-feed">
+            <div class="feed-line active-line">[{active_prefix}] >> {status}</div>
+            <div class="feed-line">[SYSTEM_LOG] >> Validating Neural Weights...</div>
+            <div class="feed-line">[TRANSMIT] >> Processing Code Chunks...</div>
+            <div class="feed-line">[AUTHENTICATE] >> Handshake Successful.</div>
         </div>
-        <div style="margin-top: 15px;">
-            <div style="color: #ffffff; font-size: 0.85rem; font-weight: 600; margin-bottom: 5px; text-transform: uppercase;"> {random_msg} </div>
-            <div style="color: rgba(255,255,255,0.6); font-size: 0.8rem; margin-bottom: 5px;"> {status} </div>
-            {f'<div style="color: #00f2ff; font-size: 0.75rem; font-family: monospace;">Estimated remaining: {eta}</div>' if eta else ''}
+        <div style="margin-top: 15px; color: rgba(0, 242, 255, 0.5); font-size: 0.7rem; text-align: right;">
+            ESTIMATED COMPLETION: {eta if eta else 'CALCULATING...'}
         </div>
     </div>
     """
-    st.markdown(progress_html, unsafe_allow_html=True)
+    
+    if progress < 100:
+        st.markdown(terminal_html, unsafe_allow_html=True)
+    else:
+        st.success("✅ Neural Indexing Complete. All vectors synchronized.")
+        st.balloons()
 
 # --- Sidebar Navigation ---
 if not st.session_state.authenticated:
