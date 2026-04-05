@@ -517,37 +517,31 @@ def render_custom_progress(status, progress, eta=None):
     """Cyberpunk-themed interactive progress bar with game-style flair"""
     import random
     game_messages = [
-        "Decrypting neural pathways...",
-        "Optimizing code vectors...",
-        "Advanced AI Agent: Ingesting repository...",
-        "Syncing results to the Vault...",
-        "Calibrating semantic matching...",
-        "Deep Scanning for logic nodes...",
-        "Nexus link established. Stream processing..."
+        "Analyzing directory structure...",
+        "Processing code vectors...",
+        "Running ingestion module...",
+        "Synchronizing search index...",
+        "Validating semantic metadata...",
+        "Scanning for logical entrypoints...",
+        "Executing stream indexing..."
     ]
-    random_msg = random.choice(game_messages) if progress < 100 else "Protocol Complete."
+    random_msg = random.choice(game_messages) if progress < 100 else "Process Complete."
     
     progress_html = f"""
-    <div style="background: rgba(0, 242, 255, 0.05); border: 1px solid rgba(0, 242, 255, 0.2); border-radius: 12px; padding: 20px; margin: 15px 0; font-family: 'Outfit', sans-serif; box-shadow: 0 0 20px rgba(0, 242, 255, 0.05);">
+    <div style="background: rgba(0, 242, 255, 0.03); border: 1px solid rgba(0, 242, 255, 0.1); border-radius: 8px; padding: 20px; margin: 15px 0; font-family: 'Inter', sans-serif;">
         <div style="display: flex; justify-content: space-between; margin-bottom: 12px; align-items: center;">
-            <span style="color: #00f2ff; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; font-size: 0.9rem;">🛰️ Ingestion Status</span>
-            <span style="color: #7000ff; font-weight: 700; font-size: 1.1rem;">{progress}%</span>
+            <span style="color: #00f2ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; font-size: 0.85rem;">System Ingestion Status</span>
+            <span style="color: #ffffff; font-weight: 600; font-size: 1rem;">{progress}%</span>
         </div>
-        <div style="background: rgba(255, 255, 255, 0.05); border-radius: 50px; height: 10px; overflow: hidden; border: 1px solid rgba(0, 242, 255, 0.1);">
-            <div style="width: {progress}%; height: 100%; background: linear-gradient(90deg, #00f2ff, #7000ff); box-shadow: 0 0 15px rgba(0, 242, 255, 0.5); transition: width 0.5s ease; animation: pulseGlow 2s infinite alternate;"></div>
+        <div style="background: rgba(255, 255, 255, 0.05); border-radius: 4px; height: 8px; overflow: hidden;">
+            <div style="width: {progress}%; height: 100%; background: #00f2ff; transition: width 0.5s ease;"></div>
         </div>
         <div style="margin-top: 15px;">
-            <div style="color: #ffffff; font-size: 0.85rem; font-weight: 700; font-family: 'Orbitron', monospace; margin-bottom: 5px; text-transform: uppercase;"> {random_msg} </div>
+            <div style="color: #ffffff; font-size: 0.85rem; font-weight: 600; margin-bottom: 5px; text-transform: uppercase;"> {random_msg} </div>
             <div style="color: rgba(255,255,255,0.6); font-size: 0.8rem; margin-bottom: 5px;"> {status} </div>
-            {f'<div style="color: #00f2ff; font-size: 0.75rem; font-weight: bold; font-family: monospace;">⏳ Est. Completion: {eta}</div>' if eta else ''}
+            {f'<div style="color: #00f2ff; font-size: 0.75rem; font-family: monospace;">Estimated remaining: {eta}</div>' if eta else ''}
         </div>
     </div>
-    <style>
-        @keyframes pulseGlow {{
-            0% {{ opacity: 0.8; filter: brightness(100%); }}
-            100% {{ opacity: 1.0; filter: brightness(130%); }}
-        }}
-    </style>
     """
     st.markdown(progress_html, unsafe_allow_html=True)
 
@@ -559,8 +553,8 @@ if not st.session_state.authenticated:
 # --- Authenticated Sidebar Content ---
 st.sidebar.image("assets/ai_vault_pro_logo.png", use_container_width=True)
 st.sidebar.markdown("<h2 style='text-align: center; color: #00f2ff; font-family: Outfit;'>COMMAND CENTER</h2>", unsafe_allow_html=True)
-st.sidebar.markdown(f"<p style='text-align: center;'>👤 Logged in as: <b>{st.session_state.user['email']}</b><br><small>({st.session_state.user['role']})</small></p>", unsafe_allow_html=True)
-if st.sidebar.button("🔓 Logout", use_container_width=True):
+st.sidebar.markdown(f"<p style='text-align: center;'>Account: <b>{st.session_state.user['email']}</b><br><small>({st.session_state.user['role']})</small></p>", unsafe_allow_html=True)
+if st.sidebar.button("Logout Access", use_container_width=True):
     st.session_state.authenticated = False
     st.session_state.user = None
     st.rerun()
@@ -602,7 +596,7 @@ menu = st.session_state.menu
 # --- Sidebar History Content (User Scoped) ---
 if st.session_state.user['role'] != 'Admin':
     st.sidebar.divider()
-    st.sidebar.subheader("🕒 Your History")
+    st.sidebar.subheader("Recent Activity")
     user_id = st.session_state.user['id']
     history = session.query(SearchHistory).filter(SearchHistory.user_id == user_id).order_by(SearchHistory.id.desc()).limit(10).all()
 
@@ -877,10 +871,15 @@ if db_current_user and db_current_user.scan_status and db_current_user.scan_stat
 # --- Dynamic Menu Content ---
 
 if menu == "Ingest":
-    st.markdown(f"{get_cyber_icon('ingest')} <h1 style='display:inline;'>Scan Repository</h1>", unsafe_allow_html=True)
-    st.write("Feed the Vault by scanning a GitHub repository or uploading files directly.")
+    st.markdown(f"""
+        <div style="display:flex; align-items:center; gap:15px; margin-bottom: 20px;">
+            {get_cyber_icon('ingest')}
+            <h1 style="margin:0; font-family: 'Inter', sans-serif;">Repository Ingestion</h1>
+        </div>
+    """, unsafe_allow_html=True)
+    st.write("Process external repositories or upload documents for indexing.")
     
-    tab_git, tab_file = st.tabs(["🌐 GitHub Scan", "📂 Direct Upload"])
+    tab_git, tab_file = st.tabs(["GitHub Source", "File System Source"])
     
     with tab_git:
         repo_url = st.text_input("Repository Target (GitHub URL)", placeholder="https://github.com/fastapi/fastapi", key="repo_url_input")
@@ -911,19 +910,25 @@ if menu == "Ingest":
             
             col_r1, col_r2 = st.columns([1,1])
             with col_r1:
-                if st.button("🔄 Refresh View", key="refresh_monitor_btn_main", use_container_width=True):
+                if st.button("Refresh View", key="refresh_monitor_btn_main", use_container_width=True):
                     st.rerun()
-            if st.button("🚨 EMERGENCY ABORT", key="abort_scan_main", type="primary", use_container_width=True):
+            with col_r2:
+                if st.button("Emergency Abort", key="abort_scan_main", type="primary", use_container_width=True):
                     db_current_user.scan_status = ""
                     db_current_user.scan_progress = 0
                     session.commit()
                     st.rerun()
 
 elif menu == "Explorer":
-    st.markdown(f"{get_cyber_icon('vault')} <h1 style='display:inline;'>Vault Explorer 2.0</h1>", unsafe_allow_html=True)
-    st.write("Quantum Database Visualization of logical Code Hubs and Satellite Metrics.")
+    st.markdown(f"""
+        <div style="display:flex; align-items:center; gap:15px; margin-bottom: 20px;">
+            {get_cyber_icon('vault')}
+            <h1 style="margin:0; font-family: 'Inter', sans-serif;">Vault Explorer</h1>
+        </div>
+    """, unsafe_allow_html=True)
+    st.write("Technical database of indexed code modules and associated metadata.")
     
-    tab_hubs, tab_files = st.tabs(["🧩 Code Hubs", "📚 File Library"])
+    tab_hubs, tab_files = st.tabs(["Code Hubs", "Document Index"])
     
     with tab_hubs:
         # Query all hubs for current user
@@ -970,8 +975,13 @@ elif menu == "Explorer":
             st.info("No documents or files have been indexed yet.")
 
 elif menu == "Architect":
-    st.markdown(f"{get_cyber_icon('chat')} <h1 style='display:inline;'>AI Architect Chat</h1>", unsafe_allow_html=True)
-    st.write("Consult the Vault's neural network about your codebase.")
+    st.markdown(f"""
+        <div style="display:flex; align-items:center; gap:15px; margin-bottom: 20px;">
+            {get_cyber_icon('chat')}
+            <h1 style="margin:0; font-family: 'Inter', sans-serif;">Architect Consultation</h1>
+        </div>
+    """, unsafe_allow_html=True)
+    st.write("Context-aware interface for codebase analysis and architecture review.")
     
     for message in st.session_state.messages:
         role_class = "user-msg" if message["role"] == "user" else "ai-msg"
@@ -1034,8 +1044,13 @@ elif menu == "Architect":
                 st.error(f"Connection Error: {str(e)}")
 
 elif menu == "Search":
-    st.markdown(f"{get_cyber_icon('search')} <h1 style='display:inline;'>Neural Search</h1>", unsafe_allow_html=True)
-    st.write("Quantum retrieval over the code graph through hybrid vector indexing.")
+    st.markdown(f"""
+        <div style="display:flex; align-items:center; gap:15px; margin-bottom: 20px;">
+            {get_cyber_icon('search')}
+            <h1 style="margin:0; font-family: 'Inter', sans-serif;">Neural Retrieval</h1>
+        </div>
+    """, unsafe_allow_html=True)
+    st.write("Similarity-based search through vectorized code embeddings.")
     
     search_q = st.text_input("Enter semantic query (e.g., 'API validation logic')", key="neural_search_input")
     if st.button("Search Vault", use_container_width=True):
@@ -1147,10 +1162,10 @@ st.sidebar.caption("Built for AI Code Vault Challenge")
 st.sidebar.write("Team:")
 st.sidebar.write("Liba, Nazish, Aleena, Hamza, Ali")
 
-# --- System Reset Section ---
+# --- System Management ---
 st.sidebar.divider()
-st.sidebar.subheader("⚙️ System Management")
-if st.sidebar.button("💥 Factory Reset Vault", help="Permanently delete all ingested repositories and history."):
+st.sidebar.subheader("System Control")
+if st.sidebar.button("Force Global Reset", help="Permanently delete all ingested repositories and history."):
     reset_vault()
 
 # Patent/Copyright Sidebar Footer
