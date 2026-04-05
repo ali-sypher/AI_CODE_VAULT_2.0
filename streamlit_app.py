@@ -520,20 +520,11 @@ def auth_page():
 
 def render_custom_progress(status, progress, eta=None):
     """Cyberpunk-themed interactive progress bar with game-style flair"""
-    # Reduce flickering by consistently picking a message for each phase
-    status_lower = status.lower()
-    if "cloning" in status_lower:
-        random_msg = "Cloning Network Source..."
-    elif "scanning" in status_lower or "searching" in status_lower:
-        random_msg = "Analyzing Directory Structure..."
-    elif "parsing" in status_lower:
-        random_msg = "Executing AST Logic..."
-    elif "indexing" in status_lower or "vector" in status_lower:
-        random_msg = "Synchronizing Vector Store..."
-    elif progress >= 100:
-        random_msg = "Process Complete."
+    # Simplified logic: Keep the message focused on the Ingestion process
+    if progress < 100:
+        random_msg = "Feeding Neural Search Index..."
     else:
-        random_msg = "Analyzing metadata..."
+        random_msg = "Process Complete."
     
     progress_html = f"""
     <div style="background: rgba(0, 242, 255, 0.03); border: 1px solid rgba(0, 242, 255, 0.1); border-radius: 8px; padding: 20px; margin: 15px 0; font-family: 'Inter', sans-serif;">
@@ -657,7 +648,7 @@ def background_scan_task(repo_url, user_id, abort_event):
 
     try:
         # --- Phase 1: Clone ---
-        _update_db(5, "Cloning repository...")
+        _update_db(0, "Preparing: Cloning repository...")
         if abort_event.is_set(): return
         
         from repo_scanner import clone_repo, scan_files, extract_functions_via_ast
@@ -665,7 +656,7 @@ def background_scan_task(repo_url, user_id, abort_event):
         if abort_event.is_set(): return
 
         # --- Phase 2: File Discovery ---
-        _update_db(20, "Scanning for Python files...")
+        _update_db(0, "Preparing: Scanning codebases...")
         files = scan_files(repo_path)
         total_files = len(files)
 
@@ -679,9 +670,8 @@ def background_scan_task(repo_url, user_id, abort_event):
             if abort_event.is_set(): 
                 _update_db(0, "Halted by User.")
                 return
-            file_prog = 20 + int(30 * (fi + 1) / total_files)
             if fi % 5 == 0: # Throttle parse updates
-                _update_db(file_prog, f"Parsing files... ({fi+1}/{total_files})")
+                _update_db(0, f"Preparing: Parsing files... ({fi+1}/{total_files})")
             all_chunks.extend(extract_functions_via_ast(f))
 
         total = len(all_chunks)
@@ -689,7 +679,7 @@ def background_scan_task(repo_url, user_id, abort_event):
             _update_db(0, "No parseable functions found.")
             return
 
-        _update_db(50, f"Indexing {total} code chunks into Vector DB...")
+        _update_db(0, f"Initializing Ingestion of {total} code chunks...")
         success_count = 0
 
         with Session(engine) as scan_session:
@@ -716,9 +706,9 @@ def background_scan_task(repo_url, user_id, abort_event):
                     scan_session.merge(new_hub)
                     success_count += 1
 
-                # Update progress every 5 chunks to keep UI responsive but stable
-                if i % 5 == 0 or i == total - 1:
-                    prog = 50 + int(48 * (i + 1) / total)
+                # Update progress strictly based on index / total
+                if i % 10 == 0 or i == total - 1:
+                    prog = int((i + 1) / total * 100)
                     eta_s = (total - i - 1) * 2
                     eta_str = f"{eta_s // 60}m {eta_s % 60}s"
                     stat = f"Indexing: {i+1}/{total} chunks — ETA {eta_str}"
