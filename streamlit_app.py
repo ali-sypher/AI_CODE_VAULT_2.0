@@ -293,10 +293,9 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- DB Initializer (Cached to avoid re-running on every page render) ---
-@st.cache_resource
+# --- DB Initializer (Cache Disabled for Heartbeat Reset) ---
 def get_db_engine_v4():
-    # We cache the engine, but we will run migrations globally outside the cache to ensure persistence.
+    # We've disabled the cache to force a fresh engine creation during this heartbeat reset.
     engine = backend['get_engine']()
     return engine
 

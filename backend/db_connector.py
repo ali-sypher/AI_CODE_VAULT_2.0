@@ -99,27 +99,27 @@ def get_engine():
         
     # 2. Nuclear Fallback: If it's Cloud OR it's not writable, we MUST use /tmp/.
     if is_cloud or not can_write:
-        db_path = "/tmp/vault_v4.db"
+        db_path = "/tmp/vault_v5.db" # Upgraded to v5 to force a clean start
         force_tmp = True
     else:
-        db_path = "./vault_v4.db"
+        db_path = "./vault_v5.db"
         force_tmp = False
     
     # 3. URL Construction with Cloud Overwrite:
-    # We enforce exactly 4 slashes for absolute /tmp paths: sqlite:////tmp/vault_v4.db
+    # We enforce exactly 4 slashes for absolute /tmp paths: sqlite:////tmp/vault_v5.db
     env_db_url = os.getenv("DATABASE_URL")
     if force_tmp:
         db_url = f"sqlite:////{db_path.lstrip('/')}"
     elif not env_db_url:
-        protocol = "sqlite:////" if db_path.startswith("/") else "sqlite:///"
-        db_url = f"{protocol}{db_path.lstrip('/') if db_path.startswith('/') else db_path}"
+        # Standard relative path construction
+        db_url = f"sqlite:///{db_path.lstrip('./')}"
     else:
         db_url = env_db_url
 
     # 4. Mandatory DB Migration:
-    if force_tmp and os.path.exists("./vault_v4.db") and not os.path.exists("/tmp/vault_v4.db"):
+    if force_tmp and os.path.exists("./vault_v5.db") and not os.path.exists("/tmp/vault_v5.db"):
         try:
-            shutil.copy2("./vault_v4.db", "/tmp/vault_v4.db")
+            shutil.copy2("./vault_v5.db", "/tmp/vault_v5.db")
         except Exception:
             pass
         
