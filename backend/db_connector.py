@@ -11,6 +11,8 @@ class User(Base):
     email = Column(String(255), unique=True, index=True)
     hashed_password = Column(String(255))
     role = Column(String(50), default='User') # 'User' or 'Admin'
+    scan_status = Column(String(255), default="")
+    scan_progress = Column(Integer, default=0)
 
 class Hub(Base):
     __tablename__ = 'hubs'

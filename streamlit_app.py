@@ -13,12 +13,13 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
 # --- Dynamic Imports for Performance ---
 @st.cache_resource
 def load_backend():
-    from db_connector import init_db, Hub, SearchHistory, User, ChatMessage, FileMetadata
+    from db_connector import init_db, get_engine, Hub, SearchHistory, User, ChatMessage, FileMetadata
     from repo_scanner import get_repo_chunks
     from ai_parser import parse_code_chunk, generate_embedding
     from file_processor import extract_text_from_file, chunk_text
     return {
         'init_db': init_db,
+        'get_engine': get_engine,
         'Hub': Hub,
         'SearchHistory': SearchHistory,
         'User': User,
@@ -32,6 +33,7 @@ def load_backend():
     }
 
 backend = load_backend()
+get_engine = backend['get_engine']
 Hub = backend['Hub']
 SearchHistory = backend['SearchHistory']
 User = backend['User']
@@ -123,13 +125,9 @@ st.markdown("""
         background: transparent !important;
     }
 
-    /* Fix: Move 'Enter to submit' hint to the left for standard fields (like Email) */
+    /* Fix: Move 'Enter to submit' hint to the left to avoid eye icon */
     div[data-testid="stInputSocial"] {
         right: 45px !important;
-    }
-    /* Hide 'Enter to submit' hint ONLY for the password field to avoid overlap with eye icon */
-    input[type="password"] ~ div[data-testid="stInputSocial"] {
-        display: none !important;
     }
 
     /* Hide Streamlit Default UI Elements */
@@ -546,10 +544,27 @@ def background_scan_task(repo_url, user_id):
     
     try:
         chunks = get_repo_chunks(repo_url)
+        
+        # Initialize database progress
+        engine = get_engine()
+        with Session(engine) as scan_session:
+            db_user = scan_session.query(User).filter(User.id == user_id).first()
+            if db_user:
+                db_user.scan_progress = 10
+                db_user.scan_status = "Cloning repository..."
+                scan_session.commit()
+
         st.session_state.scan_progress = 10
+        st.session_state.scan_status = "Cloning repository..."
         
         total = len(chunks)
         if total == 0:
+            with Session(engine) as scan_session:
+                db_user = scan_session.query(User).filter(User.id == user_id).first()
+                if db_user:
+                    db_user.scan_status = "No Python files found."
+                    db_user.scan_progress = 0
+                    scan_session.commit()
             st.session_state.scan_status = "No Python files found."
             st.session_state.is_scanning = False
             return
@@ -558,7 +573,6 @@ def background_scan_task(repo_url, user_id):
         success_count = 0
         
         # New database session for the background thread
-        engine = get_engine()
         with Session(engine) as scan_session:
             for i, chunk in enumerate(chunks):
                 parsed = parse_code_chunk(chunk)
@@ -575,21 +589,41 @@ def background_scan_task(repo_url, user_id):
                     scan_session.merge(new_hub)
                     success_count += 1
                 
-                # Update progress in session state
-                st.session_state.hubs_indexed = success_count
-                st.session_state.scan_progress = 10 + int(90 * (i+1)/total)
-                st.session_state.scan_status = f"Indexing: {i+1}/{total} chunks processed..."
+                # Update progress in session state AND DB
+                prog = 10 + int(90 * (i+1)/total)
+                stat = f"Indexing: {i+1}/{total} chunks processed..."
                 
-                if i % 10 == 0:
-                    scan_session.commit()
+                # Update DB (important for persistence)
+                if i % 5 == 0: # Update DB every 5 chunks to reduce overhead
+                    db_user = scan_session.query(User).filter(User.id == user_id).first()
+                    if db_user:
+                        db_user.scan_progress = prog
+                        db_user.scan_status = stat
+                        scan_session.commit()
+
+                st.session_state.hubs_indexed = success_count
+                st.session_state.scan_progress = prog
+                st.session_state.scan_status = stat
             
-            scan_session.commit()
+            # Final commit and status update
+            db_user = scan_session.query(User).filter(User.id == user_id).first()
+            if db_user:
+                db_user.scan_status = "Complete"
+                db_user.scan_progress = 100
+                scan_session.commit()
             
         st.session_state.scan_status = "Vault Ingestion Complete!"
         st.session_state.scan_message = f"Successfully indexed {success_count} Code Hubs from repo."
         
     except Exception as e:
-        st.session_state.scan_status = f"Critical Failure: {str(e)}"
+        status_msg = f"Critical Failure: {str(e)}"
+        engine = get_engine()
+        with Session(engine) as scan_session:
+            db_user = scan_session.query(User).filter(User.id == user_id).first()
+            if db_user:
+                db_user.scan_status = status_msg
+                scan_session.commit()
+        st.session_state.scan_status = status_msg
     
     st.session_state.is_scanning = False
 
@@ -746,7 +780,15 @@ with col_text:
     st.markdown('<div class="main-header">AI CODE VAULT V2.0</div>', unsafe_allow_html=True)
 
 # Persistent Background Progress UI
-if st.session_state.is_scanning:
+# Fetch latest from DB to support persistence across refreshes
+db_current_user = session.query(User).filter(User.id == st.session_state.user['id']).first()
+if db_current_user and db_current_user.scan_status and db_current_user.scan_status != "Complete" and not db_current_user.scan_status.startswith("Critical Failure"):
+    with st.container():
+        st.info(f"🛰️ Remote Scan Active: {db_current_user.scan_status}")
+        st.progress(db_current_user.scan_progress)
+        if st.button("Check Scan Update", key="scan_check_btn"):
+            st.rerun()
+elif st.session_state.is_scanning:
     with st.container():
         st.info(f"⚡ Background Scan Active: {st.session_state.scan_status}")
         st.progress(st.session_state.scan_progress)
