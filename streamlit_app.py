@@ -620,14 +620,22 @@ if st.session_state.user['role'] != 'Admin':
     # --- Sidebar Progress Bar ---
     try:
         db_usr = session.query(User).filter(User.id == st.session_state.user['id']).first()
-        if db_usr and db_usr.scan_status and db_usr.scan_status != "Complete" and not db_usr.scan_status.startswith("Critical Failure") and not db_usr.scan_status.startswith("Operation Halted"):
-            st.sidebar.markdown("---")
-            render_custom_progress(db_usr.scan_status, db_usr.scan_progress)
-            if st.sidebar.button("⏹️ HALT INGESTION", key="halt_sidebar", use_container_width=True):
-                db_usr.scan_status = "Operation Halted manually."
+        if db_usr and db_usr.scan_status:
+            # ONLY show if status explicitly indicates activity
+            is_active = any(keyword in db_usr.scan_status for keyword in ["Indexing", "Cloning", "Processing", "Scraping"])
+            if is_active:
+                st.sidebar.markdown("---")
+                render_custom_progress(db_usr.scan_status, db_usr.scan_progress)
+                if st.sidebar.button("⏹️ HALT INGESTION", key="halt_sidebar", use_container_width=True):
+                    db_usr.scan_status = ""
+                    db_usr.scan_progress = 0
+                    session.commit()
+                    st.rerun()
+            elif db_usr.scan_status == "Complete" or "Halted" in db_usr.scan_status:
+                # Silently purge stale status to prevent ghost UI
+                db_usr.scan_status = ""
                 db_usr.scan_progress = 0
                 session.commit()
-                st.rerun()
     except:
         pass
 
@@ -917,19 +925,21 @@ if menu == "Ingest":
         
     # Real-time Progress Display in Ingest Tab
     db_current_user = session.query(User).filter(User.id == st.session_state.user['id']).first()
-    if db_current_user and db_current_user.scan_status and db_current_user.scan_status != "Complete" and not db_current_user.scan_status.startswith("Critical Failure") and not db_current_user.scan_status.startswith("Operation Halted"):
-        st.markdown("---")
-        render_custom_progress(db_current_user.scan_status, db_current_user.scan_progress)
-        
-        col_r1, col_r2 = st.columns([1,1])
-        with col_r1:
-            if st.button("🔄 Refresh View", key="refresh_monitor_btn_main", use_container_width=True):
-                st.rerun()
-        if st.button("🚨 EMERGENCY ABORT", key="abort_scan_main", type="primary", use_container_width=True):
-                db_current_user.scan_status = "Operation Halted manually."
-                db_current_user.scan_progress = 0
-                session.commit()
-                st.rerun()
+    if db_current_user and db_current_user.scan_status:
+        is_active = any(keyword in db_current_user.scan_status for keyword in ["Indexing", "Cloning", "Processing", "Scraping"])
+        if is_active:
+            st.markdown("---")
+            render_custom_progress(db_current_user.scan_status, db_current_user.scan_progress)
+            
+            col_r1, col_r2 = st.columns([1,1])
+            with col_r1:
+                if st.button("🔄 Refresh View", key="refresh_monitor_btn_main", use_container_width=True):
+                    st.rerun()
+            if st.button("🚨 EMERGENCY ABORT", key="abort_scan_main", type="primary", use_container_width=True):
+                    db_current_user.scan_status = ""
+                    db_current_user.scan_progress = 0
+                    session.commit()
+                    st.rerun()
 
 elif menu == "Explorer":
     st.markdown(f"{get_cyber_icon('vault')} <h1 style='display:inline;'>Vault Explorer 2.0</h1>", unsafe_allow_html=True)
@@ -1176,8 +1186,10 @@ st.sidebar.markdown("""
 if st.session_state.authenticated:
     try:
         current_scan_user = session.query(User).filter(User.id == st.session_state.user['id']).first()
-        if current_scan_user and current_scan_user.scan_status and current_scan_user.scan_status != "Complete" and not current_scan_user.scan_status.startswith("Critical Failure") and not current_scan_user.scan_status.startswith("Operation Halted"):
-            time.sleep(2) # Polling rate
-            st.rerun()
+        if current_scan_user and current_scan_user.scan_status:
+            is_active = any(keyword in current_scan_user.scan_status for keyword in ["Indexing", "Cloning", "Processing", "Scraping"])
+            if is_active:
+                time.sleep(2) # Polling rate
+                st.rerun()
     except Exception as e:
         pass
