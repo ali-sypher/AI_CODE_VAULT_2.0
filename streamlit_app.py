@@ -595,6 +595,16 @@ for key, label in menu_items:
 
 menu = st.session_state.menu
 
+# --- Sidebar API Configuration ---
+st.sidebar.divider()
+st.sidebar.subheader("Neural Interface")
+with st.sidebar.expander("API Configuration"):
+    current_key = st.session_state.get('openrouter_key', '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')
+    new_key = st.text_input("OpenRouter Key", value=current_key, type="password", help="Update your API key here. Credits on OpenRouter are required.")
+    if new_key != current_key:
+        st.session_state.openrouter_key = new_key
+        st.sidebar.success("Interface mapping updated.")
+
 # --- Sidebar Activity Portal ---
 if st.session_state.user['role'] != 'Admin':
     st.sidebar.divider()
@@ -1055,11 +1065,17 @@ elif menu == "Architect":
                 Context: {context_text}
                 Question: {prompt}"""
                 
-                # API Key (User Provided)
-                api_key = os.getenv('OPENROUTER_API_KEY', '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')
+                # API Key Hierarchy: Session State > Default Hardcoded Key
+                api_key = st.session_state.get('openrouter_key', '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')
                 
-                # Dynamic Model Fallback system
-                models = ["anthropic/claude-3.5-sonnet:beta", "anthropic/claude-3-5-sonnet", "google/gemini-pro-1.5", "meta-llama/llama-3.1-405b-instruct"]
+                # Resilient Fallback Hierarchy (including high-availability free tier)
+                models = [
+                    "anthropic/claude-3.5-sonnet:beta", 
+                    "google/gemini-pro-1.5", 
+                    "meta-llama/llama-3.1-70b-instruct", 
+                    "meta-llama/llama-3.1-8b-instruct:free",
+                    "openchat/openchat-7b:free"
+                ]
                 
                 success = False
                 for model in models:
@@ -1090,12 +1106,20 @@ elif menu == "Architect":
                             success = True
                             break
                         elif 'error' in data:
-                            st.caption(f"Endpoint Bypass: Model {model} unavailable. Attempting fallback...")
+                            # Advanced Error Reporting
+                            err_msg = data['error'].get('message', '')
+                            if 'credits' in err_msg.lower() or 'funds' in err_msg.lower():
+                                st.error("Neural Interface Exhausted: No credits remaining on OpenRouter.")
+                                break # Stop retrying if key is out of cash
+                            elif 'key' in err_msg.lower():
+                                st.error("Interface Rejection: API Key is invalid or restricted.")
+                                break
+                            st.caption(f"Bypass: {model} failed. Attempting {models[models.index(model)+1] if models.index(model)+1 < len(models) else 'End of list'}")
                     except Exception as e:
                         continue
                 
                 if not success:
-                    st.error("Global Neural Interface Failure: All specific models unreachable. Check API credits or connection.")
+                    st.error("Global Neural Interface Failure: All specific models unreachable. Please verify credits or update API key in the sidebar.")
 
 elif menu == "Search":
     st.markdown(f"""
