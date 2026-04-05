@@ -209,8 +209,52 @@
             color: #79c0ff;
             font-size: 1.1rem;
             line-height: 1.6;
+            overflow-x: auto;
         }
-        
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .header-bar {
+                padding: 15px 20px;
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+            .main-container {
+                padding-left: 20px;
+                padding-right: 20px;
+            }
+            .pipeline-container {
+                display: none; /* Hide decorative pipeline on mobile */
+            }
+            .hero-block {
+                margin-top: 40px;
+            }
+            .h1-hero {
+                font-size: 3rem;
+            }
+            .p-hero {
+                font-size: 1.1rem;
+                margin-bottom: 2rem;
+            }
+            .bento-grid {
+                grid-template-columns: 1fr;
+            }
+            .hero-bg {
+                width: 100%;
+                right: 0;
+            }
+            .btn-secondary {
+                margin-left: 0;
+                margin-top: 15px;
+                display: block;
+                text-align: center;
+            }
+            .btn-primary {
+                display: block;
+                text-align: center;
+            }
+        }
     </style>
 </head>
 <body>
