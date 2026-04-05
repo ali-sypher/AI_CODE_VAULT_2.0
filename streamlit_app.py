@@ -62,6 +62,11 @@ st.set_page_config(
 # --- Custom Styling (Immersive Cyber Space) ---
 st.markdown("""
 <style>
+    /* Hide Streamlit Default UI Elements */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700&family=Inter:wght@400;700&display=swap');
     
     .stApp {
