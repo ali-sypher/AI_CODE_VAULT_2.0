@@ -279,8 +279,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- DB Helper ---
-@st.cache_resource
+# --- DB Initializer (Un-cached to force table generation) ---
 def get_db_session_v4():
     return backend['init_db']()
 

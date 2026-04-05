@@ -91,15 +91,19 @@ def run_migrations(engine):
                 if 'scan_progress' not in columns:
                     conn.execute(text("ALTER TABLE users ADD COLUMN scan_progress INTEGER DEFAULT 0"))
         
-        # Immediate creation of key_pool if missing (Base.metadata.create_all is the primary, this is the fail-safe)
-        if 'key_pool' not in inspector.get_table_names():
+        # Direct Schema Enforcement for KeyPool (Ensures availability on all deployments)
+        try:
+            from sqlalchemy.orm import Session
+            KeyPool.__table__.create(engine)
+            print("VAULT_DEBUG: Force-provisioned KeyPool schema.")
+        except Exception:
+            # Table already exists or creation failed, proceed to metadata fail-safe
             try:
-                KeyPool.__table__.create(engine)
-                print("VAULT_DEBUG: Generated missing key_pool table via __table__.")
-            except:
                 Base.metadata.create_all(engine)
+            except:
+                pass
     except Exception as e:
-        print(f"VAULT_DEBUG: Migration error: {e}")
+        print(f"VAULT_DEBUG: Critical Migration Failure: {e}")
 
 def init_db():
     engine = get_engine()
