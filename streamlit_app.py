@@ -1257,9 +1257,7 @@ elif menu == "Admin_Activity":
         st.info("No activity logs generated yet.")
 
 st.sidebar.divider()
-st.sidebar.caption("Built for AI Code Vault Challenge")
-st.sidebar.write("Team:")
-st.sidebar.write("Liba, Nazish, Aleena, Hamza, Ali")
+
 
 def reset_vault():
     """Nuclear reset of all database content"""
