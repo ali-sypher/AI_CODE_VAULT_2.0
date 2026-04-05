@@ -862,12 +862,12 @@ def run_scan(repo_url):
     with Session(engine) as scan_session:
         db_user = scan_session.query(User).filter(User.id == user_id).first()
         if db_user:
-            db_user.scan_status = "Cloning repository..."
-            db_user.scan_progress = 5
+            db_user.scan_status = "Preparing: Cloning repository..."
+            db_user.scan_progress = 0
             scan_session.commit()
 
-    st.session_state.scan_status = "Cloning repository..."
-    st.session_state.scan_progress = 5
+    st.session_state.scan_status = "Preparing: Cloning repository..."
+    st.session_state.scan_progress = 0
     st.session_state.abort_event.clear() # Reset kill-switch
     st.session_state.is_scanning = True
 
