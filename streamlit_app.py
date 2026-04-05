@@ -847,24 +847,17 @@ db_current_user = session.query(User).filter(User.id == st.session_state.user['i
 if db_current_user and db_current_user.scan_status and db_current_user.scan_status != "Complete" and not db_current_user.scan_status.startswith("Critical Failure"):
     with st.container():
         st.info(f"🛰️ Remote Scan Active: {db_current_user.scan_status}")
-        st.progress(db_current_user.scan_progress)
-        if st.button("Check Scan Update", key="scan_check_btn"):
-            st.rerun()
-elif st.session_state.is_scanning:
-    with st.container():
-        st.info(f"⚡ Background Scan Active: {st.session_state.scan_status}")
-        st.progress(st.session_state.scan_progress)
+# --- Dynamic Menu Content ---
 
 if menu == "Ingest":
-    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    st.header("Nexus Ingestion Portal")
+    st.header("🌐 Scan Repository")
     st.write("Feed the Vault by scanning a GitHub repository or uploading files directly.")
     
     tab_git, tab_file = st.tabs(["🌐 GitHub Scan", "📂 Direct Upload"])
     
     with tab_git:
         repo_url = st.text_input("Repository Target (GitHub URL)", placeholder="https://github.com/fastapi/fastapi", key="repo_url_input")
-        if st.button("Initialize Repository Scan", key="btn_scan"):
+        if st.button("Initialize Repository Scan", key="btn_scan", use_container_width=True):
             if repo_url:
                 run_scan(repo_url)
             else:
@@ -873,7 +866,7 @@ if menu == "Ingest":
     with tab_file:
         uploaded_file = st.file_uploader("Upload Document / Code", type=["py", "pdf", "docx", "txt", "csv"], help="Drag and drop for instant indexing.")
         if uploaded_file is not None:
-            if st.button("Index File", key="btn_index"):
+            if st.button("Index File", key="btn_index", use_container_width=True):
                 process_file_content(uploaded_file, st.session_state.user['id'])
                 st.rerun()
 
@@ -891,17 +884,14 @@ if menu == "Ingest":
         with col_r1:
             if st.button("🔄 Refresh View", key="refresh_monitor_btn_main", use_container_width=True):
                 st.rerun()
-        with col_r2:
-            if st.button("🚨 EMERGENCY ABORT", key="abort_scan_main", type="primary", use_container_width=True):
+        if st.button("🚨 EMERGENCY ABORT", key="abort_scan_main", type="primary", use_container_width=True):
                 db_current_user.scan_status = "Operation Halted manually."
                 db_current_user.scan_progress = 0
                 session.commit()
                 st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
 
 elif menu == "Explorer":
-    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    st.header("Vault Database - Metadata Table")
+    st.header("📁 Vault Explorer")
     st.write("A verified table of functions, classes, and code hubs.")
     
     # Query all hubs for current user
@@ -927,11 +917,10 @@ elif menu == "Explorer":
                 st.code(selected_hub.code_snippet, language='python')
     else:
         st.info("No data ingested yet. Go to 'Scan Repository' to begin.")
-    st.markdown('</div>', unsafe_allow_html=True)
 
 elif menu == "Architect":
-    st.markdown('<div class="chat-container">', unsafe_allow_html=True)
-    st.markdown('<h2 style="font-family:Outfit; text-align:center; margin-bottom:3rem;">Vault Architect</h2>', unsafe_allow_html=True)
+    st.header("🧠 AI Architect Chat")
+    st.write("Consult the Vault's neural network about your codebase.")
     
     for message in st.session_state.messages:
         role_class = "user-msg" if message["role"] == "user" else "ai-msg"
@@ -946,7 +935,6 @@ elif menu == "Architect":
         st.session_state.messages.append({"role": "user", "content": prompt})
         st.markdown(f'<div class="user-msg">{prompt}</div>', unsafe_allow_html=True)
 
-        st.markdown('<div class="ai-msg">', unsafe_allow_html=True)
         with st.spinner("Consulting the Vault Embeddings..."):
             # RAG Logic
             context_results = run_hybrid_search(prompt)
@@ -981,50 +969,39 @@ elif menu == "Architect":
                 data = response.json()
                 
                 if 'error' in data:
-                    st.error(f"Vault Architect API Error: {data['error'].get('message', 'Unknown OpenRouter Error')}")
-                    if 'code' in data['error']: st.caption(f"Error Code: {data['error']['code']}")
+                    st.error(f"Vault Architect Error: {data['error'].get('message', 'Unknown Error')}")
                 elif 'choices' in data:
                     full_response = data['choices'][0]['message']['content']
-                    
-                    # Save AI Message to DB & Session
                     ai_msg = ChatMessage(user_id=st.session_state.user['id'], role="assistant", content=full_response, timestamp=datetime.now().isoformat())
                     session.add(ai_msg)
                     session.commit()
-                    
                     st.markdown(full_response)
                     st.session_state.messages.append({"role": "assistant", "content": full_response})
-                    st.toast("Response Decoded", icon="🧠")
                 else:
-                    st.error(f"Unexpected API Response Structure. Data: {str(data)[:200]}...")
+                    st.error("Invalid API Response Structure.")
             except Exception as e:
-                st.markdown(f"Architect Connection Error: {str(e)}")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown('</div>', unsafe_allow_html=True)
+                st.error(f"Connection Error: {str(e)}")
 
 elif menu == "Search":
-    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    st.header("Neural Similarity Search")
+    st.header("🔍 Neural Search")
     st.write("Quantum retrieval over the code graph through hybrid vector indexing.")
     
-    search_q = st.text_input("Describe the logic you seek...", value=st.session_state.get('search_query', ''))
-    if st.button("Search Vault"):
+    search_q = st.text_input("Enter semantic query (e.g., 'API validation logic')", key="neural_search_input")
+    if st.button("Search Vault", use_container_width=True):
         if search_q:
             with st.spinner("Searching Vector Embeddings..."):
                 results = run_hybrid_search(search_q)
-                st.session_state.last_results = results
+                if results:
+                    for res in results:
+                        st.markdown(f"### Hub: `{res['name']}` (Score: {res['score']})")
+                        st.code(res['snippet'], language='python')
+                else:
+                    st.info("No relevant matches found in the Vault.")
         else:
-            st.warning("Enter a query.")
-            
-    if 'last_results' in st.session_state:
-        st.divider()
-        st.subheader(f"Results for '{search_q}'")
-        for res in st.session_state.last_results:
-            with st.expander(f"{res['name']} (Score: {res['score']})"):
-                st.code(res['snippet'], language='python')
-    st.markdown('</div>', unsafe_allow_html=True)
+            st.warning("Please enter a query description.")
 
 elif menu == "Analytics":
+    st.header("📊 Analytics Portal")
     user_id = st.session_state.user['id']
     total_hubs = session.query(Hub).filter(Hub.user_id == user_id).count()
     total_searches = session.query(SearchHistory).filter(SearchHistory.user_id == user_id).count()
