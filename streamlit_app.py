@@ -993,65 +993,63 @@ elif menu == "Architect":
     """, unsafe_allow_html=True)
     st.write("Context-aware interface for codebase analysis and architecture review.")
     
+    # --- Main Chat Interface ---
     for message in st.session_state.messages:
-        role_class = "user-msg" if message["role"] == "user" else "ai-msg"
-        st.markdown(f'<div class="{role_class}">{message["content"]}</div>', unsafe_allow_html=True)
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
-    if prompt := st.chat_input("Ask about your code & documents..."):
-        # Save User Message to DB & Session
+    if prompt := st.chat_input("Enter architectural query..."):
+        # Save and Display User Input
         user_msg = ChatMessage(user_id=st.session_state.user['id'], role="user", content=prompt, timestamp=datetime.now().isoformat())
         session.add(user_msg)
         session.commit()
         
         st.session_state.messages.append({"role": "user", "content": prompt})
-        st.markdown(f'<div class="user-msg">{prompt}</div>', unsafe_allow_html=True)
+        with st.chat_message("user"):
+            st.markdown(prompt)
 
-        with st.spinner("Consulting the Vault Embeddings..."):
-            # RAG Logic
-            context_results = run_hybrid_search(prompt)
-            context_text = "\n\n".join([f"File: {r['name']}\nCode:\n{r['snippet']}" for r in context_results])
-            
-            final_prompt = f"""You are the AI Architect for this codebase. 
-            Use the following retrieved code snippets to answer the user's question.
-            If the code doesn't contain the answer, say you don't know based on the current vault.
-            
-            Context:
-            {context_text}
-            
-            Question: {prompt}
-            
-            Answer:"""
-            
-            # API Call (Robust handling for OpenRouter)
-            try:
-                api_key = os.getenv('OPENROUTER_API_KEY', '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')
-                response = requests.post(
-                    url="https://openrouter.ai/api/v1/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json"
-                    },
-                    data=json.dumps({
-                        "model": "anthropic/claude-3.5-sonnet",
-                        "messages": [{"role": "user", "content": final_prompt}]
-                    }),
-                    timeout=30
-                )
-                data = response.json()
+        with st.chat_message("assistant"):
+            with st.spinner("Analyzing Vault Embeddings..."):
+                # RAG Logic
+                context_results = run_hybrid_search(prompt)
+                context_text = "\n\n".join([f"File: {r['name']}\nCode:\n{r['snippet']}" for r in context_results])
                 
-                if 'error' in data:
-                    st.error(f"Vault Architect Error: {data['error'].get('message', 'Unknown Error')}")
-                elif 'choices' in data:
-                    full_response = data['choices'][0]['message']['content']
-                    ai_msg = ChatMessage(user_id=st.session_state.user['id'], role="assistant", content=full_response, timestamp=datetime.now().isoformat())
-                    session.add(ai_msg)
-                    session.commit()
-                    st.markdown(full_response)
-                    st.session_state.messages.append({"role": "assistant", "content": full_response})
-                else:
-                    st.error("Invalid API Response Structure.")
-            except Exception as e:
-                st.error(f"Connection Error: {str(e)}")
+                final_prompt = f"""You are the AI Architect. Use the provided context to answer. 
+                Context: {context_text}
+                Question: {prompt}"""
+                
+                try:
+                    # Model: anthropic/claude-3.5-sonnet:beta is the stable OpenRouter endpoint
+                    api_key = os.getenv('OPENROUTER_API_KEY', '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')
+                    response = requests.post(
+                        url="https://openrouter.ai/api/v1/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {api_key}",
+                            "Content-Type": "application/json",
+                            "HTTP-Referer": "https://aicodevault.streamlit.app",
+                            "X-Title": "AI Code Vault Pro"
+                        },
+                        data=json.dumps({
+                            "model": "anthropic/claude-3.5-sonnet:beta", 
+                            "messages": [{"role": "user", "content": final_prompt}]
+                        }),
+                        timeout=45
+                    )
+                    data = response.json()
+                    
+                    if 'error' in data:
+                        st.error(f"Consultation Error: {data['error'].get('message', 'Model Endpoint Error')}")
+                    elif 'choices' in data:
+                        full_res = data['choices'][0]['message']['content']
+                        ai_msg = ChatMessage(user_id=st.session_state.user['id'], role="assistant", content=full_res, timestamp=datetime.now().isoformat())
+                        session.add(ai_msg)
+                        session.commit()
+                        st.markdown(full_res)
+                        st.session_state.messages.append({"role": "assistant", "content": full_res})
+                    else:
+                        st.error("Protocol Mismatch: Unexpected API structure.")
+                except Exception as e:
+                    st.error(f"Interface Fault: {str(e)}")
 
 elif menu == "Search":
     st.markdown(f"""
