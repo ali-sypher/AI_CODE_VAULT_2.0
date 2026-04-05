@@ -963,7 +963,7 @@ if menu == "Ingest":
             import time as _time
             _time.sleep(2)
             st.rerun()
-        elif "complete" in status_lower or "halted" in status_lower:
+        elif "complete" in status_lower or "halted" in status_lower or "critical" in status_lower:
             st.toast(live_status, icon="✅" if "complete" in status_lower else "🛑")
             _u = session.query(User).filter(User.id == st.session_state.user['id']).first()
             if _u:

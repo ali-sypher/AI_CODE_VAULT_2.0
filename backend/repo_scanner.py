@@ -4,6 +4,17 @@ import shutil
 from git import Repo
 
 def clone_repo(repo_url, target_dir="./data/repos"):
+    # Detect Streamlit Cloud to circumvent read-only directory policies
+    is_cloud = os.path.exists("/mount/src") or os.environ.get("STREAMLIT_SERVER_PORT") or os.environ.get("STREAMLIT_RUNTIME_ENV")
+    
+    try:
+        is_writable = os.access(".", os.W_OK)
+    except Exception:
+        is_writable = False
+        
+    if is_cloud or not is_writable:
+        target_dir = "/tmp/repos"
+        
     repo_name = repo_url.rstrip('/').split('/')[-1].replace('.git', '')
     repo_path = os.path.abspath(os.path.join(target_dir, repo_name))
     
