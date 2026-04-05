@@ -601,10 +601,12 @@ def background_scan_task(repo_url, user_id):
                 
                 # Update progress in session state AND DB
                 prog = 10 + int(90 * (i+1)/total)
-                stat = f"Indexing: {i+1}/{total} chunks processed..."
+                eta_seconds = (total - (i + 1)) * 2 # Est. 2s per chunk
+                eta_str = f"{eta_seconds // 60}m {eta_seconds % 60}s"
+                stat = f"Indexing: {i+1}/{total} chunks. Est. remaining: {eta_str}"
                 
                 # Update DB (important for persistence)
-                if i % 5 == 0: # Update DB every 5 chunks to reduce overhead
+                if i % 3 == 0: # Update DB more frequently for smoothness
                     db_user = scan_session.query(User).filter(User.id == user_id).first()
                     if db_user:
                         db_user.scan_progress = prog
@@ -716,7 +718,9 @@ def run_scan(repo_url):
     user_id = st.session_state.user['id']
     thread = threading.Thread(target=background_scan_task, args=(repo_url, user_id))
     thread.start()
-    st.success("Scan Agent dispatched to background. You can navigate away safely!")
+    st.toast("🚀 Vault Ingestion Started!", icon="🛰️")
+    time.sleep(1)
+    st.rerun() # Force immediate UI refresh to show progress bar
 
 def run_hybrid_search(query):
     user_id = st.session_state.user['id']
