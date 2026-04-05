@@ -154,6 +154,9 @@ def run_migrations(engine):
                     conn.execute(text("ALTER TABLE users ADD COLUMN scan_status VARCHAR(255) DEFAULT ''"))
                 if 'scan_progress' not in columns:
                     conn.execute(text("ALTER TABLE users ADD COLUMN scan_progress INTEGER DEFAULT 0"))
+                if 'session_token' not in columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN session_token VARCHAR(255)"))
+                    print("VAULT_DEBUG: Migrated 'session_token' column.")
         
         # Direct Schema Enforcement for KeyPool (Ensures availability on all deployments)
         try:
