@@ -106,12 +106,13 @@ def get_engine():
         force_tmp = False
     
     # 3. URL Construction with Cloud Overwrite:
-    # If we are in 'force_tmp' mode, we ignore DATABASE_URL from the environment 
-    # because it likely points to a readonly repository location.
+    # We enforce exactly 4 slashes for absolute /tmp paths: sqlite:////tmp/vault_v4.db
     env_db_url = os.getenv("DATABASE_URL")
-    if force_tmp or not env_db_url:
+    if force_tmp:
+        db_url = f"sqlite:////{db_path.lstrip('/')}"
+    elif not env_db_url:
         protocol = "sqlite:////" if db_path.startswith("/") else "sqlite:///"
-        db_url = f"{protocol}{db_path}"
+        db_url = f"{protocol}{db_path.lstrip('/') if db_path.startswith('/') else db_path}"
     else:
         db_url = env_db_url
 
@@ -119,7 +120,6 @@ def get_engine():
     if force_tmp and os.path.exists("./vault_v4.db") and not os.path.exists("/tmp/vault_v4.db"):
         try:
             shutil.copy2("./vault_v4.db", "/tmp/vault_v4.db")
-            print("VAULT_DEBUG: Successfully migrated DB to /tmp for write access.")
         except Exception:
             pass
         
@@ -142,34 +142,49 @@ def get_engine():
     return engine
 
 def run_migrations(engine):
-    """Iron-Clad Raw SQL migrations to ensure columns exist regardless of inspector state"""
+    """Iron-Clad Raw SQL migrations with Auto-Recovery for 'Poisoned' DBs"""
     from sqlalchemy import text
+    import os
     
-    # We use raw SQL with try-except to 'Brute Force' the columns into existence.
-    # If the column already exists, the command fails harmlessly.
-    with engine.begin() as conn:
-        # 1. session_token (New: Persistent Auth)
-        try:
-            conn.execute(text("ALTER TABLE users ADD COLUMN session_token VARCHAR(255)"))
-            print("VAULT_DEBUG: Forced migration of 'session_token'")
-        except Exception:
-            pass
-            
-        # 2. scan_status (Background Ops)
-        try:
-            conn.execute(text("ALTER TABLE users ADD COLUMN scan_status VARCHAR(255) DEFAULT ''"))
-        except Exception:
-            pass
-
-        # 3. scan_progress (Background Ops)
-        try:
-            conn.execute(text("ALTER TABLE users ADD COLUMN scan_progress INTEGER DEFAULT 0"))
-        except Exception:
-            pass
-            
-    # Metadata Fail-safe
+    db_file = str(engine.url).replace("sqlite:////", "/").replace("sqlite:///", "")
+    
     try:
-        from sqlalchemy.orm import Session
+        with engine.begin() as conn:
+            # 1. session_token (New: Persistent Auth)
+            try:
+                conn.execute(text("ALTER TABLE users ADD COLUMN session_token VARCHAR(255)"))
+                print("VAULT_DEBUG: Migrated 'session_token'")
+            except Exception: pass
+                
+            # 2. scan_status (Background Ops)
+            try:
+                conn.execute(text("ALTER TABLE users ADD COLUMN scan_status VARCHAR(255) DEFAULT ''"))
+            except Exception: pass
+
+            # 3. scan_progress (Background Ops)
+            try:
+                conn.execute(text("ALTER TABLE users ADD COLUMN scan_progress INTEGER DEFAULT 0"))
+            except Exception: pass
+            
+        # --- Integrity Check: Can we actually see the column now? ---
+        with engine.connect() as conn:
+            conn.execute(text("SELECT session_token FROM users LIMIT 1"))
+            
+    except Exception as e:
+        # --- NUCLEAR RESET: If the DB is 'Poisoned' and won't accept ALTER TABLE ---
+        if "no such column: session_token" in str(e).lower() or "readonly" in str(e).lower():
+            if os.path.exists(db_file):
+                try:
+                    import time
+                    os.rename(db_file, f"{db_file}.bak_{int(time.time())}")
+                    print(f"VAULT_DEBUG: NUCLEAR RESET - Corrupted DB renamed. Refreshing schema...")
+                    # Re-create all tables
+                    Base.metadata.create_all(engine)
+                except Exception as reset_err:
+                    print(f"VAULT_DEBUG: Nuclear reset failed: {reset_err}")
+    
+    # Final Table Provisioning
+    try:
         Base.metadata.create_all(engine)
     except:
         pass
