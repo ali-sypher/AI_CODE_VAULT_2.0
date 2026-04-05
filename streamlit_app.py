@@ -738,12 +738,12 @@ def background_scan_task(repo_url, user_id, abort_event):
         if abort_event.is_set(): return
 
         # --- Phase 2: File Discovery ---
-        _update_db(0, "Preparing: Scanning codebases...")
+        _update_db(0, "Preparing: Scanning multi-language codebases...")
         files = scan_files(repo_path)
         total_files = len(files)
 
         if total_files == 0:
-            _update_db(0, "No Python files found in repository.")
+            _update_db(0, "No supported code files found in repository.")
             return
 
         # --- Phase 3: AST Chunking + Indexing ---

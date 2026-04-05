@@ -44,13 +44,37 @@ def clone_repo(repo_url, target_dir="./data/repos"):
     
     return repo_path
 
-def scan_files(repo_path, ext=".py"):
+def scan_files(repo_path, extensions=['.py', '.js', '.jsx', '.ts', '.tsx', '.html', '.css', '.md', '.json', '.sql']):
     filepaths = []
     for root, dirs, files in os.walk(repo_path):
         for file in files:
-            if file.endswith(ext):
+            if any(file.endswith(ext) for ext in extensions):
                 filepaths.append(os.path.join(root, file))
     return filepaths
+
+def extract_text_chunks_generic(filepath, chunk_size=1500, overlap=200):
+    """
+    Fallback chunking for non-Python files that don't support AST.
+    Uses sliding window text chunking.
+    """
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            source = f.read()
+            
+        chunks = []
+        # Basic chunking by character count with overlap
+        for i in range(0, len(source), chunk_size - overlap):
+            snippet = source[i:i + chunk_size]
+            chunks.append({
+                "name": f"{os.path.basename(filepath)}#chunk{len(chunks)}",
+                "type": "code_snippet",
+                "code": snippet,
+                "file_path": filepath
+            })
+        return chunks
+    except Exception as e:
+        print(f"Failed to chunk {filepath}: {e}")
+        return []
 
 def extract_functions_via_ast(filepath):
     """
@@ -73,10 +97,14 @@ def extract_functions_via_ast(filepath):
                     "code": ast.get_source_segment(source, node),
                     "file_path": filepath
                 })
+        # If no AST chunks found but file has content, fallback to generic
+        if not chunks and len(source) > 50:
+            return extract_text_chunks_generic(filepath)
+            
         return chunks
     except Exception as e:
-        print(f"Failed to parse AST for {filepath}: {e}")
-        return []
+        # If AST fails (e.g. syntax error), fallback to generic
+        return extract_text_chunks_generic(filepath)
 
 def get_repo_chunks(repo_url):
     repo_path = clone_repo(repo_url)
@@ -84,6 +112,9 @@ def get_repo_chunks(repo_url):
     
     all_chunks = []
     for f in files:
-        all_chunks.extend(extract_functions_via_ast(f))
+        if f.endswith('.py'):
+            all_chunks.extend(extract_functions_via_ast(f))
+        else:
+            all_chunks.extend(extract_text_chunks_generic(f))
     
     return all_chunks
