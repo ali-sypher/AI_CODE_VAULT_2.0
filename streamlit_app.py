@@ -547,6 +547,22 @@ if st.session_state.user['role'] != 'Admin':
     else:
         st.sidebar.info("No query history yet.")
 
+    # --- Persistent Scan Progress (Sidebar) ---
+    # Polling DB to ensure persistence across refreshes
+    try:
+        db_current_user = session.query(User).filter(User.id == st.session_state.user['id']).first()
+        if db_current_user and db_current_user.scan_status and db_current_user.scan_status != "Complete" and not db_current_user.scan_status.startswith("Critical Failure"):
+            st.sidebar.markdown("---")
+            st.sidebar.subheader("🛰️ Active Ingestion")
+            st.sidebar.info(db_current_user.scan_status)
+            st.sidebar.progress(db_current_user.scan_progress)
+            
+            # This triggers a rerun after 3 seconds to update the progress bar automatically
+            time.sleep(3)
+            st.rerun()
+    except Exception as e:
+        pass # Handle potential session conflicts gracefully
+
 # --- Functions ---
 def background_scan_task(repo_url, user_id):
     """Execution logic in a background thread"""
@@ -791,19 +807,7 @@ with col_logo:
 with col_text:
     st.markdown('<div class="main-header">AI CODE VAULT V2.0</div>', unsafe_allow_html=True)
 
-# Persistent Background Progress UI
-# Fetch latest from DB to support persistence across refreshes
-db_current_user = session.query(User).filter(User.id == st.session_state.user['id']).first()
-if db_current_user and db_current_user.scan_status and db_current_user.scan_status != "Complete" and not db_current_user.scan_status.startswith("Critical Failure"):
-    with st.container():
-        st.info(f"🛰️ Remote Scan Active: {db_current_user.scan_status}")
-        st.progress(db_current_user.scan_progress)
-        if st.button("Check Scan Update", key="scan_check_btn"):
-            st.rerun()
-elif st.session_state.is_scanning:
-    with st.container():
-        st.info(f"⚡ Background Scan Active: {st.session_state.scan_status}")
-        st.progress(st.session_state.scan_progress)
+# --- Persistent Background Progress UI (Moved to Sidebar for better visibility)
 
 if menu == "Ingest":
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
