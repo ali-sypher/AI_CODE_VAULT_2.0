@@ -82,6 +82,7 @@ def run_migrations(engine):
     from sqlalchemy import inspect, text
     try:
         inspector = inspect(engine)
+        # Migration for users table columns
         if 'users' in inspector.get_table_names():
             columns = [c['name'] for c in inspector.get_columns('users')]
             with engine.begin() as conn:
@@ -89,6 +90,11 @@ def run_migrations(engine):
                     conn.execute(text("ALTER TABLE users ADD COLUMN scan_status VARCHAR(255) DEFAULT ''"))
                 if 'scan_progress' not in columns:
                     conn.execute(text("ALTER TABLE users ADD COLUMN scan_progress INTEGER DEFAULT 0"))
+        
+        # Immediate creation of key_pool if missing (Base.metadata.create_all is the primary, this is the fail-safe)
+        if 'key_pool' not in inspector.get_table_names():
+            Base.metadata.tables['key_pool'].create(engine)
+            print("VAULT_DEBUG: Generated missing key_pool table.")
     except Exception as e:
         print(f"VAULT_DEBUG: Migration error: {e}")
 
