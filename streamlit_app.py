@@ -479,6 +479,44 @@ def auth_page():
                             st.balloons()
         st.markdown('</div>', unsafe_allow_html=True)
 
+def render_custom_progress(status, progress, eta=None):
+    """Cyberpunk-themed interactive progress bar with game-style flair"""
+    import random
+    game_messages = [
+        "Decrypting neural pathways...",
+        "Optimizing code vectors...",
+        "Advanced AI Agent: Ingesting repository...",
+        "Syncing results to the Vault...",
+        "Calibrating semantic matching...",
+        "Deep Scanning for logic nodes...",
+        "Nexus link established. Stream processing..."
+    ]
+    random_msg = random.choice(game_messages) if progress < 100 else "Protocol Complete."
+    
+    progress_html = f"""
+    <div style="background: rgba(0, 242, 255, 0.05); border: 1px solid rgba(0, 242, 255, 0.2); border-radius: 12px; padding: 20px; margin: 15px 0; font-family: 'Outfit', sans-serif; box-shadow: 0 0 20px rgba(0, 242, 255, 0.05);">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 12px; align-items: center;">
+            <span style="color: #00f2ff; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; font-size: 0.9rem;">🛰️ Ingestion Status</span>
+            <span style="color: #7000ff; font-weight: 700; font-size: 1.1rem;">{progress}%</span>
+        </div>
+        <div style="background: rgba(255, 255, 255, 0.05); border-radius: 50px; height: 10px; overflow: hidden; border: 1px solid rgba(0, 242, 255, 0.1);">
+            <div style="width: {progress}%; height: 100%; background: linear-gradient(90deg, #00f2ff, #7000ff); box-shadow: 0 0 15px rgba(0, 242, 255, 0.5); transition: width 0.5s ease; animation: pulseGlow 2s infinite alternate;"></div>
+        </div>
+        <div style="margin-top: 15px;">
+            <div style="color: #ffffff; font-size: 0.85rem; font-weight: 700; font-family: 'Orbitron', monospace; margin-bottom: 5px; text-transform: uppercase;"> {random_msg} </div>
+            <div style="color: rgba(255,255,255,0.6); font-size: 0.8rem; margin-bottom: 5px;"> {status} </div>
+            {f'<div style="color: #00f2ff; font-size: 0.75rem; font-weight: bold; font-family: monospace;">⏳ Est. Completion: {eta}</div>' if eta else ''}
+        </div>
+    </div>
+    <style>
+        @keyframes pulseGlow {{
+            0% {{ opacity: 0.8; filter: brightness(100%); }}
+            100% {{ opacity: 1.0; filter: brightness(130%); }}
+        }}
+    </style>
+    """
+    st.markdown(progress_html, unsafe_allow_html=True)
+
 # --- Sidebar Navigation ---
 if not st.session_state.authenticated:
     auth_page()
@@ -544,6 +582,20 @@ if st.session_state.user['role'] != 'Admin':
 
     else:
         st.sidebar.info("No query history yet.")
+
+    # --- Sidebar Progress Bar ---
+    try:
+        db_usr = session.query(User).filter(User.id == st.session_state.user['id']).first()
+        if db_usr and db_usr.scan_status and db_usr.scan_status != "Complete" and not db_usr.scan_status.startswith("Critical Failure") and not db_usr.scan_status.startswith("Operation Halted"):
+            st.sidebar.markdown("---")
+            render_custom_progress(db_usr.scan_status, db_usr.scan_progress)
+            if st.sidebar.button("⏹️ HALT INGESTION", key="halt_sidebar", use_container_width=True):
+                db_usr.scan_status = "Operation Halted manually."
+                db_usr.scan_progress = 0
+                session.commit()
+                st.rerun()
+    except:
+        pass
 
 # --- Functions ---
 def background_scan_task(repo_url, user_id):
@@ -831,13 +883,20 @@ if menu == "Ingest":
         
     # Real-time Progress Display in Ingest Tab
     db_current_user = session.query(User).filter(User.id == st.session_state.user['id']).first()
-    if db_current_user and db_current_user.scan_status and db_current_user.scan_status != "Complete" and not db_current_user.scan_status.startswith("Critical Failure"):
+    if db_current_user and db_current_user.scan_status and db_current_user.scan_status != "Complete" and not db_current_user.scan_status.startswith("Critical Failure") and not db_current_user.scan_status.startswith("Operation Halted"):
         st.markdown("---")
-        st.subheader("🛰️ Repository Ingestion in Progress")
-        st.info(f"**Status:** {db_current_user.scan_status}")
-        st.progress(db_current_user.scan_progress)
-        if st.button("Refresh Monitor", key="refresh_monitor_btn"):
-            st.rerun()
+        render_custom_progress(db_current_user.scan_status, db_current_user.scan_progress)
+        
+        col_r1, col_r2 = st.columns([1,1])
+        with col_r1:
+            if st.button("🔄 Refresh View", key="refresh_monitor_btn_main", use_container_width=True):
+                st.rerun()
+        with col_r2:
+            if st.button("🚨 EMERGENCY ABORT", key="abort_scan_main", type="primary", use_container_width=True):
+                db_current_user.scan_status = "Operation Halted manually."
+                db_current_user.scan_progress = 0
+                session.commit()
+                st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
 elif menu == "Explorer":
@@ -1059,7 +1118,17 @@ if st.sidebar.button("💥 Factory Reset Vault", help="Permanently delete all in
 
 # Patent/Copyright Sidebar Footer
 st.sidebar.markdown("""
-    <div style="margin-top: 3rem; text-align: center; color: rgba(255,255,255,0.3); font-size: 0.75rem; font-family: 'Inter', sans-serif;">
-    © 2026 AI Code Vault<br>All Rights Reserved<br>Patent Pending
     </div>
 """, unsafe_allow_html=True)
+
+# --- GLOBAL HEARTBEAT POLLER ---
+# If a scan is currently active in the database for the current user,
+# force a rerun after a short delay to update the progress bar in real-time.
+if st.session_state.authenticated:
+    try:
+        current_scan_user = session.query(User).filter(User.id == st.session_state.user['id']).first()
+        if current_scan_user and current_scan_user.scan_status and current_scan_user.scan_status != "Complete" and not current_scan_user.scan_status.startswith("Critical Failure") and not current_scan_user.scan_status.startswith("Operation Halted"):
+            time.sleep(2) # Polling rate
+            st.rerun()
+    except Exception as e:
+        pass
