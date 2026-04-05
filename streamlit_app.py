@@ -123,9 +123,13 @@ st.markdown("""
         background: transparent !important;
     }
 
-    /* Fix: Move 'Enter to submit' hint to the left to avoid eye icon */
+    /* Fix: Move 'Enter to submit' hint to the left for standard fields (like Email) */
     div[data-testid="stInputSocial"] {
         right: 45px !important;
+    }
+    /* Hide 'Enter to submit' hint ONLY for the password field to avoid overlap with eye icon */
+    div[data-testid="stTextInput"]:has(input[type="password"]) div[data-testid="stInputSocial"] {
+        display: none !important;
     }
 
     /* Hide Streamlit Default UI Elements */
