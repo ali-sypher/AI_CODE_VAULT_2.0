@@ -390,7 +390,7 @@ def auth_page():
         st.markdown('</div>', unsafe_allow_html=True)
 
 # --- Sidebar Navigation ---
-st.sidebar.image(r"C:\Users\Ali Aliyyan\.gemini\antigravity\brain\f10956f1-2a7c-4353-8e8f-678d5e4bd8ab\ai_vault_pro_logo_1775332828537.png", use_container_width=True)
+# st.sidebar.image("assets/ai_vault_pro_logo.png", use_container_width=True) # Logo missing remotely
 st.sidebar.markdown("<h2 style='text-align: center; color: #00f2ff; font-family: Outfit;'>COMMAND CENTER</h2>", unsafe_allow_html=True)
 
 if not st.session_state.authenticated:
