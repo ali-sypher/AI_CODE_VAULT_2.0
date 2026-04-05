@@ -286,16 +286,21 @@ def get_db_session_v4():
     import base64
     from db_connector import KeyPool
     
-    # Check if pool empty
+    # Check if pool empty or needs a clean sweep (Force wipe on this push for sterile re-bootstrap)
+    if sess.query(KeyPool).count() > 0:
+         # TEMPORARY: Clear faulty assets from memory to allow sterile re-boot
+         sess.query(KeyPool).delete()
+         sess.commit()
+
     if sess.query(KeyPool).count() == 0:
         assets = [
             ("GROQ", "Z3NrXzk3QmMxQjNmSFEzYmd2REV3ckdFV0dyeWIzRll0VU9rZUpIZDd3UU9TQjZ6VXJqWU1qVko=", "Primary_Alpha"),
             ("GROQ", "Z3NrX1Z5eEtGYk9FQVZ6VlNIZ2k1OHRvV0dyeWIzRlliWnZxNE1yUXJ6SHZROWZJMlVVRERadWM=", "Primary_Beta"),
-            ("OPENROUTER", "c2stb3ItdjEtNmRkMTkwNTNjMzEwNWVlZDYzNzhjNTdlMTI3YmU0ODRjMTNjMjQ0ODU3YWZiMjc5NzI5ZTlkNTI2YWE0NTY3NA==", "Guardian_1"),
-            ("OPENROUTER", "c2stb3ItdjEtN2M1Y2I1ODZlZTY1ZTg1OTIxNDM1NGVlMjc5ZWYwNDg0Y2YyNmIxMzc4MjRmNjIxYTFmNzI2MGQyMzU5ODE4OQ==", "Guardian_2")
+            ("OPENROUTER", "c2stb3ItdjEtNmRkMTkwNTNjMzEwNWVlZDYzNzhjNTdlMTI3YmU0ODRjMTNjMjQ0ODU3YWZiMjc5NzI5ZTlkNTI2YWE0NTY3NA==", "Sonnet_Alpha"),
+            ("OPENROUTER", "c2stb3ItdjEtN2M1Y2I1ODZlZTY1ZTg1OTIxNDM1NGVlMjc5ZWYwNDg0Y2YyNmIxMzc4MjRmNjIxYTFmNzI2MGQyMzU5ODE4OQ==", "Sonnet_Beta")
         ]
         for prov, b64_key, name in assets:
-            raw_key = base64.b64decode(b64_key).decode('utf-8')
+            raw_key = base64.b64decode(b64_key).decode('utf-8').strip()
             sess.add(KeyPool(provider=prov, key_value=raw_key, name=name, is_active=1))
         sess.commit()
     return sess
@@ -1086,7 +1091,7 @@ elif menu == "Architect":
                 for k in active_groq:
                     providers.append(("GROQ", "https://api.groq.com/openai/v1/chat/completions", k.key_value, "llama-3.1-70b-versatile"))
                 for k in active_or:
-                    providers.append(("OPENROUTER", "https://openrouter.ai/api/v1/chat/completions", k.key_value, "anthropic/claude-3.5-sonnet:beta"))
+                    providers.append(("OPENROUTER", "https://openrouter.ai/api/v1/chat/completions", k.key_value, "anthropic/claude-3.5-sonnet"))
                 
                 success = False
                 if not providers:
