@@ -1145,11 +1145,10 @@ if menu == "Ingest":
             db_current_user.scan_progress = 0
             session.commit()
             st.rerun()
+    # Initialize live variables for UI display
+    live_status = db_current_user.scan_status if db_current_user else ""
+    live_prog = db_current_user.scan_progress if db_current_user else 0
     
-    # If session is empty but DB has data (persistent recovery), use DB
-    if not live_status and db_current_user and db_current_user.scan_status:
-        live_status = db_current_user.scan_status
-        live_prog = db_current_user.scan_progress
 
     if live_status:
         status_lower = live_status.lower()
