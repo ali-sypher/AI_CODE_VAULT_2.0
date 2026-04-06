@@ -12,23 +12,23 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
 # --- Dynamic Imports for Performance (V3 CACHE KILL) ---
 @st.cache_resource
 def load_backend_v3():
-    from db_connector import init_db, get_engine, Hub, SearchHistory, User, ChatMessage, FileMetadata, Satellite, KeyPool, Base, run_migrations, get_schema_diagnostics
+    import db_connector as db
     from repo_scanner import get_repo_chunks
     from ai_parser import parse_code_chunk, generate_embedding
     from file_processor import extract_text_from_file, chunk_text
     return {
-        'init_db': init_db,
-        'get_engine': get_engine,
-        'Base': Base,
-        'run_migrations': run_migrations,
-        'get_schema_diagnostics': get_schema_diagnostics,
-        'Hub': Hub,
-        'SearchHistory': SearchHistory,
-        'User': User,
-        'ChatMessage': ChatMessage,
-        'FileMetadata': FileMetadata,
-        'Satellite': Satellite,
-        'KeyPool': KeyPool,
+        'init_db': db.init_db,
+        'get_engine': db.get_engine,
+        'Base': db.Base,
+        'run_migrations': db.run_migrations,
+        'get_schema_diagnostics': db.get_schema_diagnostics,
+        'Hub': db.Hub,
+        'SearchHistory': db.SearchHistory,
+        'User': db.User,
+        'ChatMessage': db.ChatMessage,
+        'FileMetadata': db.FileMetadata,
+        'Satellite': db.Satellite,
+        'KeyPool': db.KeyPool,
         'get_repo_chunks': get_repo_chunks,
         'parse_code_chunk': parse_code_chunk,
         'generate_embedding': generate_embedding,
