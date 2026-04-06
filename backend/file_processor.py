@@ -24,8 +24,8 @@ def extract_text_from_file(uploaded_file, file_type):
             reader = csv.reader(io.StringIO(content))
             for row in reader:
                 text += " ".join(row) + "\n"
-        elif file_type in ['txt', 'py', 'md']:
-            content = uploaded_file.getvalue().decode('utf-8')
+        elif file_type in ['txt', 'py', 'md', 'js', 'ts', 'jsx', 'tsx', 'html', 'css', 'json', 'sql']:
+            content = uploaded_file.getvalue().decode('utf-8', errors='ignore')
             text = content
     except Exception as e:
         print(f"Error extracting text from {file_type}: {str(e)}")

@@ -679,7 +679,12 @@ if not st.session_state.authenticated:
 
 # --- Authenticated Sidebar Content ---
 st.sidebar.image("assets/ai_vault_pro_logo.png", use_container_width=True)
-st.sidebar.markdown("<h2 style='text-align: center; color: #00f2ff; font-family: Outfit;'>COMMAND CENTER</h2>", unsafe_allow_html=True)
+st.sidebar.markdown("""
+    <div style='text-align: center; margin-bottom: 20px;'>
+        <h2 style='color: #00f2ff; font-family: Outfit; margin-bottom:0;'>COMMAND CENTER</h2>
+        <small style='opacity:0.5; color: #00f2ff;'>[SYNC_ACTIVE_V5]</small>
+    </div>
+""", unsafe_allow_html=True)
 st.sidebar.markdown(f"<p style='text-align: center;'>Account: <b>{st.session_state.user['email']}</b><br><small>({st.session_state.user['role']})</small></p>", unsafe_allow_html=True)
 if st.sidebar.button("Logout Access", use_container_width=True):
     try:
@@ -902,46 +907,45 @@ def process_file_content(uploaded_file, user_id):
         session.add(new_file_meta)
         session.commit()
 
-        # Extract & Chunk
-        raw_text = extract_text_from_file(uploaded_file, file_ext)
-        st.session_state.scan_status = "Generating Embeddings..."
+        # Universal Ingestion: Use AI Parser for all supported file types
+        st.session_state.scan_status = f"Analyzing {filename} with AI..."
         
-        if file_ext == 'py':
-            # Use AST parser for Python
-            parsed = parse_code_chunk(raw_text)
+        # Determine if we need to chunk (for large files) or process atomically
+        if len(raw_text) > 2000:
+            chunks = chunk_text(raw_text, chunk_size=1500, overlap=100)
+        else:
+            chunks = [raw_text]
+            
+        total_chunks = len(chunks)
+        for i, c in enumerate(chunks):
+            if not c.strip(): continue
+            
+            # Create a mock chunk object for the AI Parser
+            # We use 'chunk' as a base type, the AI will refine it to 'module', 'document', etc.
+            chunk_obj = {
+                "name": f"{filename}#part{i+1}" if total_chunks > 1 else filename,
+                "type": "chunk",
+                "code": c,
+                "file_path": f"direct_upload/{filename}"
+            }
+            
+            # AI Deep Parsing (Language Agnostic)
+            parsed = parse_code_chunk(chunk_obj)
             if parsed and parsed.get('hub'):
                 hub_data = parsed['hub']
                 new_hub = Hub(
-                    hash_key=f"{filename}_{hub_data['hash_key']}",
+                    hash_key=hub_data['hash_key'],
                     type=hub_data['type'],
-                    code_snippet=hub_data['code_snippet'],
+                    code_snippet=c,
                     file_path=f"direct_upload/{filename}",
                     embedding=hub_data.get('embedding', []),
                     user_id=user_id,
                     file_id=new_file_meta.id,
-                    source_type='py'
-                )
-                session.merge(new_hub)
-        else:
-            # Generic Text Chunking
-            chunks = chunk_text(raw_text, chunk_size=800, overlap=100)
-            st.session_state.scan_progress = 50
-            total_chunks = len(chunks)
-            for i, c in enumerate(chunks):
-                if not c.strip(): continue
-                emb = generate_embedding(c)
-                new_hub = Hub(
-                    hash_key=f"{filename}_chunk_{i}",
-                    type="chunk",
-                    code_snippet=c,
-                    file_path=f"direct_upload/{filename}",
-                    embedding=emb,
-                    user_id=user_id,
-                    file_id=new_file_meta.id,
                     source_type=file_ext
                 )
-                session.add(new_hub)
-                st.session_state.scan_progress = 50 + int(50 * (i+1)/total_chunks)
+                session.merge(new_hub)
+                
+            st.session_state.scan_progress = int(100 * (i+1)/total_chunks)
                 
         session.commit()
         st.session_state.scan_message = f"Successfully indexed {filename} into the Vault."
@@ -1074,29 +1078,72 @@ if menu == "Ingest":
     tab_git, tab_file = st.tabs(["GitHub Source", "File System Source"])
     
     with tab_git:
-        repo_url = st.text_input("Repository Target (GitHub URL)", placeholder="https://github.com/fastapi/fastapi", key="repo_url_input")
-        if st.button("Initialize Repository Scan", key="btn_scan", use_container_width=True):
+        repo_url = st.text_input("Repository Target (Git URL or Local Absolute Path)", 
+                                placeholder="https://github.com/fastapi/fastapi OR C:\Users\Dev\Project", 
+                                key="repo_url_input",
+                                help="Supports public GitHub URLs or local directories for instant indexing.")
+        if st.button("Initialize Vault Ingestion", key="btn_scan", use_container_width=True):
             if repo_url:
                 run_scan(repo_url)
             else:
-                st.warning("Please provide a valid URL.")
+                st.warning("Please provide a valid URL or Path.")
                 
     with tab_file:
-        uploaded_file = st.file_uploader("Upload Document / Code", type=["py", "pdf", "docx", "txt", "csv"], help="Drag and drop for instant indexing.")
+        allowed_types = ["py", "js", "ts", "jsx", "tsx", "html", "css", "md", "json", "sql", "pdf", "docx", "txt", "csv"]
+        uploaded_file = st.file_uploader("Upload Document / Code", type=allowed_types, help="Drag and drop for instant indexing.")
         if uploaded_file is not None:
             if st.button("Index File", key="btn_index", use_container_width=True):
                 process_file_content(uploaded_file, st.session_state.user['id'])
                 st.rerun()
 
-    if st.session_state.scan_message:
-        st.success(st.session_state.scan_message)
-        st.session_state.scan_message = ""
-        
-    # Real-time Progress Display (Prioritize Session State for Instant Response, Fallback to DB)
+    # --- Live Neural Heartbeat: Progress Polling ---
     db_current_user = session.query(User).filter(User.id == st.session_state.user['id']).first()
     
-    live_status = st.session_state.get('scan_status', '')
-    live_prog = st.session_state.get('scan_progress', 0)
+    if db_current_user and db_current_user.scan_status and "Complete" not in db_current_user.scan_status and "Failure" not in db_current_user.scan_status:
+        st.markdown(f"""
+            <div style="margin-top:20px; padding:20px; border-radius:15px; background: rgba(0,255,204,0.03); border: 1px solid rgba(0,255,204,0.2);">
+                <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                    <span style="color:#00ffcc; font-weight:600; font-family:Outfit;">🛰️ NEURAL SCAN IN PROGRESS</span>
+                    <span style="color:#00ffcc; opacity:0.8;">{db_current_user.scan_progress}%</span>
+                </div>
+                <div style="height:4px; width:100%; background:rgba(0,255,204,0.1); border-radius:10px; overflow:hidden;">
+                    <div style="height:100%; width:{db_current_user.scan_progress}%; background:#00ffcc; box-shadow:0 0 15px #00ffcc; transition: width 0.5s ease;"></div>
+                </div>
+                <div style="margin-top:12px; font-size:0.85rem; opacity:0.7; color:#00ffcc;">
+                    <b>Current Stage:</b> {db_current_user.scan_status}
+                </div>
+                <div style="margin-top:8px; display:flex; align-items:center; gap:8px;">
+                    <div class="pulse-dot"></div> <small style="opacity:0.5;">Processing Neural Chunks...</small>
+                </div>
+            </div>
+            <style>
+                @keyframes pulse-ring {{
+                    0% {{ transform: scale(.33); }}
+                    80%, 100% {{ opacity: 0; }}
+                }}
+                .pulse-dot {{
+                    width: 8px; height: 8px; background: #00ffcc; border-radius: 50%;
+                    position: relative;
+                }}
+                .pulse-dot::after {{
+                    content: ''; position: absolute; top: -12px; left: -12px; width: 32px; height: 32px;
+                    border: 2px solid #00ffcc; border-radius: 50%;
+                    animation: pulse-ring 1.25s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+                }}
+            </style>
+        """, unsafe_allow_html=True)
+        
+        # Throttled Rerun Heartbeat (Poll every 1.5s)
+        time.sleep(1.5)
+        st.rerun()
+    elif db_current_user and "Complete" in db_current_user.scan_status:
+        st.success(f"✅ {db_current_user.scan_status}")
+        # Clear status to avoid persistent bars
+        if st.button("Acknowledge Ingestion"):
+            db_current_user.scan_status = ""
+            db_current_user.scan_progress = 0
+            session.commit()
+            st.rerun()
     
     # If session is empty but DB has data (persistent recovery), use DB
     if not live_status and db_current_user and db_current_user.scan_status:
@@ -1288,8 +1335,16 @@ elif menu == "Search":
                 results = run_hybrid_search(search_q)
                 if results:
                     for res in results:
+                        # Determine highlighting language
+                        lang = 'python'
+                        if '.' in res['name']:
+                            ext = res['name'].split('.')[-1].lower()
+                            if ext in ['js', 'ts', 'jsx', 'tsx']: lang = 'javascript'
+                            elif ext in ['html', 'css', 'json', 'sql']: lang = ext
+                            elif ext in ['md']: lang = 'markdown'
+                        
                         st.markdown(f"### Hub: `{res['name']}` (Score: {res['score']})")
-                        st.code(res['snippet'], language='python')
+                        st.code(res['snippet'], language=lang)
                 else:
                     st.info("No relevant matches found in the Vault.")
         else:
@@ -1430,37 +1485,38 @@ elif menu == "Admin_Activity":
     else:
         st.info("No activity logs generated yet.")
 
-st.sidebar.divider()
+# --- Sidebar Global Components ---
+with st.sidebar:
+    # Patent/Copyright Sidebar Footer
+    st.markdown("""
+        <div style='text-align: center; margin-top: 50px; opacity: 0.3; font-size: 0.7rem;'>
+            &copy; 2026 AI CODE VAULT PRO<br>
+            Neural Processing Unit v2.5.9
+        </div>
+    """, unsafe_allow_html=True)
+    
+    st.divider()
+    st.subheader("System Control")
+    
+    # Neural Status Indicator (Dynamic)
+    try:
+        db_diags = backend['get_schema_diagnostics'](engine_v4)
+        status_c = "#00ffcc" if db_diags['file_exists'] else "#ff4b4b"
+        st.markdown(f"""
+            <div style="padding:12px; border-radius:10px; background: rgba(0,255,204,0.05); border: 1px solid {status_c}44; font-family: 'Inter', sans-serif;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <div style="width:8px; height:8px; border-radius:50%; background:{status_c}; box-shadow: 0 0 10px {status_c};"></div>
+                    <span style="color:{status_c}; font-weight:600; font-size:0.85rem;">NEURAL STATUS: OPERATIONAL</span>
+                </div>
+                <div style="margin-top:4px; opacity:0.6; font-size:0.75rem;">Vault: {db_diags['file_path'].split('/')[-1]}</div>
+            </div>
+        """, unsafe_allow_html=True)
+    except:
+        st.error("Neural Connection Offline")
 
-
-def reset_vault():
-    """Nuclear reset of all database content"""
-    # Delete the database file (SQLite specific)
-    db_path = "./vault_v4.db"
-    if os.path.exists(db_path):
-        try:
-            os.remove(db_path)
-        except:
-            pass
-    # Clear local storage
-    if os.path.exists("./scanner_clones"):
-        try:
-            shutil.rmtree("./scanner_clones")
-        except:
-            pass
-    st.success("The Vault has been completely neutralized. Restarting system...")
-    time.sleep(2)
-    st.rerun()
-
-# --- System Management ---
-st.sidebar.divider()
-st.sidebar.subheader("System Control")
-if st.sidebar.button("Force Global Reset", help="Permanently delete all ingested repositories and history."):
-    reset_vault()
-
-# Patent/Copyright Sidebar Footer
-st.sidebar.markdown("""
-""", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("Force Global Reset", help="Permanently delete all ingested repositories and history.", use_container_width=True):
+        reset_vault()
 
 if st.session_state.authenticated and menu == "Ingest":
     try:

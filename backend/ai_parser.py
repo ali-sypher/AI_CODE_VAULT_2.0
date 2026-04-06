@@ -16,28 +16,28 @@ client = OpenAI(
 )
 
 SYSTEM_PROMPT = """
-You are AI Code Vault Parser. You receive python code chunks (functions or classes) and must output a JSON object describing it. 
-Identify the core object as a 'hub', its outgoing calls to other functions as 'links', and metadata as 'satellites'.
+You are AI Knowledge Vault Parser. You receive chunks of code or technical documentation and must output a JSON object describing it. 
+Identify the core object as a 'hub', its outgoing calls/references as 'links', and metadata as 'satellites'.
+Identify the 'type' of the hub as one of: 'function', 'class', 'component', 'module', 'document', or 'chunk'.
+
 Output ONLY valid JSON matching this schema:
 {
   "hub": {
-    "hash_key": "string (name of function)",
-    "type": "function or class"
+    "hash_key": "string (name of function, class, or document section)",
+    "type": "string (from the list above)"
   },
   "links": [
-    { "target_hash": "string (name of function being called)", "relationship_type": "calls" }
+    { "target_hash": "string (name of entity being referenced)", "relationship_type": "calls or references" }
   ],
   "satellite": {
     "metrics": {
       "lines_of_code": integer,
-      "parameters": ["list", "of", "args"],
+      "parameters": ["list", "of", "args/props"],
       "complexity_estimate": "low/medium/high"
     }
   }
 }
 """
-
-import hashlib
 
 def generate_embedding(text):
     """
@@ -59,8 +59,8 @@ def fallback_parse(chunk):
     code_text = chunk.get("code", "")
     return {
         "hub": {
-            "hash_key": chunk.get("name", "unknown_function"),
-            "type": chunk.get("type", "function"),
+            "hash_key": chunk.get("name", "unknown_entity"),
+            "type": chunk.get("type", "chunk"),
             "code_snippet": code_text,
             "file_path": chunk.get("file_path", "unknown"),
             "embedding": generate_embedding(code_text)
@@ -77,8 +77,9 @@ def fallback_parse(chunk):
 
 def parse_code_chunk(chunk):
     code_text = chunk.get("code")
-    file_path = chunk.get("file_path")
-    print(f"Parsing chunk: {chunk.get('name')} from {file_path}")
+    file_path = chunk.get("file_path", "")
+    file_ext = file_path.split('.')[-1].lower() if '.' in file_path else 'text'
+    print(f"Parsing {file_ext} chunk: {chunk.get('name')} from {file_path}")
     
     try:
         # Attempt AI Parsing via OpenRouter
@@ -86,7 +87,7 @@ def parse_code_chunk(chunk):
             model=OPENROUTER_MODEL,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"Code:\n```python\n{code_text}\n```"}
+                {"role": "user", "content": f"File Extension: {file_ext}\nContent:\n```{file_ext}\n{code_text}\n```"}
             ],
             response_format={"type": "json_object"},
             timeout=10 # Reasonable timeout for a single chunk

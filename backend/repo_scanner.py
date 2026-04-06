@@ -4,18 +4,21 @@ import shutil
 from git import Repo
 
 def clone_repo(repo_url, target_dir="./data/repos"):
+    # Normalize path (handle Windows quotes and backslashes)
+    repo_url = repo_url.strip().strip('"').strip("'")
+    
+    # 1. SMART DETECTION: Is this a local directory?
+    if os.path.isdir(repo_url):
+        abs_path = os.path.abspath(repo_url)
+        print(f"VAULT_DEBUG: Identified local directory ingestion: {abs_path}")
+        return abs_path
+
     # Detect Streamlit Cloud to circumvent read-only directory policies
     is_cloud = os.path.exists("/mount/src") or os.environ.get("STREAMLIT_SERVER_PORT") or os.environ.get("STREAMLIT_RUNTIME_ENV")
-    
-    try:
-        is_writable = os.access(".", os.W_OK)
-    except Exception:
-        is_writable = False
-        
-    if is_cloud or not is_writable:
+    if is_cloud or not os.access(".", os.W_OK):
         target_dir = "/tmp/repos"
         
-    # Use a stable hash of the URL to avoid path collisions and ensure consistency
+    # Use a stable hash of the URL to ensure consistent pathing
     import hashlib
     repo_hash = hashlib.md5(repo_url.encode()).hexdigest()[:12]
     repo_path = os.path.abspath(os.path.join(target_dir, f"repo_{repo_hash}"))
@@ -23,21 +26,27 @@ def clone_repo(repo_url, target_dir="./data/repos"):
     if not os.path.exists(target_dir):
         os.makedirs(target_dir, exist_ok=True)
     
+    # 2. DELTA CATCH-UP: Pull if exists, else clone
     if os.path.exists(repo_path):
-        # Clean up existing dir for a fresh clone
-        shutil.rmtree(repo_path, ignore_errors=True)
+        try:
+            print(f"VAULT_DEBUG: Repository {repo_path} exists. Fetching delta updates...")
+            repo = Repo(repo_path)
+            repo.remotes.origin.pull()
+            return repo_path
+        except Exception as e:
+            print(f"VAULT_DEBUG: Failed to pull ({e}). Re-cloning...")
+            shutil.rmtree(repo_path, ignore_errors=True)
     
-    print(f"Cloning {repo_url} into {repo_path}...")
+    print(f"Cloning remote {repo_url} into {repo_path}...")
     import subprocess
     
-    # 1. Force Headless Git: Disable interactive prompts for credentials (prevents "hang" at 0%)
+    # Force Headless Git (prevents hangs at 0%)
     git_env = os.environ.copy()
     git_env["GIT_TERMINAL_PROMPT"] = "0"
     git_env["GIT_SSH_COMMAND"] = "ssh -o BatchMode=yes"
 
     try:
-        # Using subprocess with depth=1 and fixed environment
-        result = subprocess.run(
+        subprocess.run(
             ["git", "clone", "--depth", "1", repo_url, repo_path],
             env=git_env,
             check=True,
@@ -45,16 +54,11 @@ def clone_repo(repo_url, target_dir="./data/repos"):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE
         )
-    except subprocess.TimeoutExpired:
-        raise Exception("Git Clone Interrupted: Operation timed out after 120s. Repository may be too large or the network is throttled.")
     except subprocess.CalledProcessError as e:
-        # Capture precise error from the git terminal (e.g., Repository Not Found)
         err = e.stderr.decode() if e.stderr else "Unknown Git error"
-        if "Authentication failed" in err or "not found" in err.lower():
-            raise Exception(f"Git Access Denied: {err.strip()}")
         raise Exception(f"Git Error: {err.strip()}")
     except Exception as e:
-        raise Exception(f"Repository Ingestion Engine Error: {str(e)}")
+        raise Exception(f"Ingestion Engine Error: {str(e)}")
     
     return repo_path
 
@@ -92,9 +96,12 @@ def extract_text_chunks_generic(filepath, chunk_size=1500, overlap=200):
 
 def extract_functions_via_ast(filepath):
     """
-    Parses a python file with AST and extracts functions/classes
-    to reduce the token payload to the LLM.
+    Parses a python file with AST and extracts functions/classes.
+    FALLBACK: If not a python file, uses sliding-window.
     """
+    if not filepath.endswith('.py'):
+        return extract_text_chunks_generic(filepath)
+        
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             source = f.read()
