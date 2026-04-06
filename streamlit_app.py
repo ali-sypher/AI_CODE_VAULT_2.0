@@ -110,7 +110,7 @@ def render_satellite_card(metrics):
 
 # --- Page Configuration ---
 st.set_page_config(
-    page_title="AI CODE VAULT 2.0 [SYNC_ACTIVE_V5]",
+    page_title="AI CODE VAULT 2.0 [SYNC_ACTIVE_V6]",
     page_icon="🧬",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -1079,9 +1079,9 @@ if menu == "Ingest":
     
     with tab_git:
         repo_url = st.text_input("Repository Target (Git URL or Local Absolute Path)", 
-                                placeholder="https://github.com/fastapi/fastapi OR C:\Users\Dev\Project", 
+                                placeholder=r"https://github.com/fastapi/fastapi OR C:\Users\Dev\Project", 
                                 key="repo_url_input",
-                                help="Supports public GitHub URLs or local directories for instant indexing.")
+                                help=r"Supports public GitHub URLs or local directories for instant indexing.")
         if st.button("Initialize Vault Ingestion", key="btn_scan", use_container_width=True):
             if repo_url:
                 run_scan(repo_url)
