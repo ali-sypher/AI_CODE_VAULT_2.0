@@ -2,62 +2,105 @@ import os
 import ast
 import shutil
 from git import Repo
+import logging
+
+def _log_debug(msg):
+    """Bypasses DB logging to write to a raw system file for emergency troubleshooting."""
+    log_file = "/tmp/vault_v6_debug.log"
+    import datetime
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    formatted = f"[{timestamp}] [INGEST_TELEMETRY] {msg}\n"
+    try:
+        with open(log_file, "a") as f:
+            f.write(formatted)
+        print(formatted.strip())
+    except:
+        pass
 
 def clone_repo(repo_url, target_dir="./data/repos"):
-    # Normalize path (handle Windows quotes and backslashes)
+    _log_debug(f"START: clone_repo initiated for target: {repo_url}")
+    # Normalize path
     repo_url = repo_url.strip().strip('"').strip("'")
     
-    # 1. SMART DETECTION: Is this a local directory?
-    if os.path.isdir(repo_url):
-        abs_path = os.path.abspath(repo_url)
-        print(f"VAULT_DEBUG: Identified local directory ingestion: {abs_path}")
-        return abs_path
+    # 1. ENVIRONMENT HEALTH CHECK
+    git_bin = shutil.which('git')
+    if not git_bin:
+        _log_debug("CRITICAL: 'git' binary not found in system PATH!")
+        raise Exception("System Error: Git is not installed or not in PATH.")
+    else:
+        _log_debug(f"INFRA: Git identified at {git_bin}")
 
-    # Detect Streamlit Cloud to circumvent read-only directory policies
     is_cloud = os.path.exists("/mount/src") or os.environ.get("STREAMLIT_SERVER_PORT") or os.environ.get("STREAMLIT_RUNTIME_ENV")
     if is_cloud or not os.access(".", os.W_OK):
         target_dir = "/tmp/repos"
+        _log_debug(f"INFRA: Cloud/Restricted env detected. Using storage: {target_dir}")
         
-    # Use a stable hash of the URL to ensure consistent pathing
+    if not os.path.exists(target_dir):
+        try:
+            os.makedirs(target_dir, exist_ok=True)
+            _log_debug(f"INFRA: Created storage directory: {target_dir}")
+        except Exception as e:
+            _log_debug(f"CRITICAL: Failed to create storage dir: {e}")
+            raise e
+
+    # Write-Access Probe
+    try:
+        probe_file = os.path.join(target_dir, "probe.tmp")
+        with open(probe_file, 'w') as f: f.write('1')
+        os.remove(probe_file)
+        _log_debug("INFRA: Write access verified for target_dir.")
+    except Exception as e:
+        _log_debug(f"CRITICAL: target_dir is NOT writable: {e}")
+        raise e
+
+    # 2. LOCAL DIR SHORT-CIRCUIT
+    if os.path.isdir(repo_url):
+        abs_path = os.path.abspath(repo_url)
+        _log_debug(f"INGEST: Identified local directory ingestion: {abs_path}")
+        return abs_path
+
+    # 3. REMOTE CLONE LOGIC
     import hashlib
     repo_hash = hashlib.md5(repo_url.encode()).hexdigest()[:12]
     repo_path = os.path.abspath(os.path.join(target_dir, f"repo_{repo_hash}"))
+    _log_debug(f"INGEST: Target repo path hashed to: {repo_path}")
     
-    if not os.path.exists(target_dir):
-        os.makedirs(target_dir, exist_ok=True)
-    
-    # 2. DELTA CATCH-UP: Pull if exists, else clone
     if os.path.exists(repo_path):
         try:
-            print(f"VAULT_DEBUG: Repository {repo_path} exists. Fetching delta updates...")
+            _log_debug(f"DELTA: Repository exists. Initiating git pull...")
             repo = Repo(repo_path)
             repo.remotes.origin.pull()
+            _log_debug("DELTA: Pull successful.")
             return repo_path
         except Exception as e:
-            print(f"VAULT_DEBUG: Failed to pull ({e}). Re-cloning...")
+            _log_debug(f"DELTA_FAIL: Failed to pull ({e}). Wiping and re-cloning...")
             shutil.rmtree(repo_path, ignore_errors=True)
     
-    print(f"Cloning remote {repo_url} into {repo_path}...")
+    _log_debug(f"CLONE: Cloning remote {repo_url}...")
     import subprocess
     
-    # Force Headless Git (prevents hangs at 0%)
     git_env = os.environ.copy()
     git_env["GIT_TERMINAL_PROMPT"] = "0"
     git_env["GIT_SSH_COMMAND"] = "ssh -o BatchMode=yes"
 
     try:
-        subprocess.run(
+        proc = subprocess.run(
             ["git", "clone", "--depth", "1", repo_url, repo_path],
             env=git_env,
             check=True,
             timeout=120,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            capture_output=True,
+            text=True
         )
+        _log_debug("CLONE: Git clone command finished successfully.")
+        return repo_path
     except subprocess.CalledProcessError as e:
-        err = e.stderr.decode() if e.stderr else "Unknown Git error"
+        err = e.stderr if e.stderr else "Unknown Git error"
+        _log_debug(f"CRITICAL: Git Clone Failed: {err.strip()}")
         raise Exception(f"Git Error: {err.strip()}")
     except Exception as e:
+        _log_debug(f"CRITICAL: Unexpected clone failure: {e}")
+        raise e
         raise Exception(f"Ingestion Engine Error: {str(e)}")
     
     return repo_path
@@ -128,14 +171,23 @@ def extract_functions_via_ast(filepath):
         return extract_text_chunks_generic(filepath)
 
 def get_repo_chunks(repo_url):
-    repo_path = clone_repo(repo_url)
-    files = scan_files(repo_path)
-    
-    all_chunks = []
-    for f in files:
-        if f.endswith('.py'):
-            all_chunks.extend(extract_functions_via_ast(f))
-        else:
-            all_chunks.extend(extract_text_chunks_generic(f))
-    
-    return all_chunks
+    _log_debug(f"INGEST_CHAIN: Starting chunking chain for {repo_url}")
+    try:
+        repo_path = clone_repo(repo_url)
+        _log_debug(f"INGEST_CHAIN: Clone phase complete. Path: {repo_path}")
+        
+        files = scan_files(repo_path)
+        _log_debug(f"INGEST_CHAIN: Found {len(files)} files for analysis.")
+        
+        all_chunks = []
+        for f in files:
+            chunks = extract_functions_via_ast(f)
+            all_chunks.extend(chunks)
+        
+        _log_debug(f"INGEST_CHAIN: Extraction complete. Total chunks generated: {len(all_chunks)}")
+        return all_chunks
+    except Exception as e:
+        _log_debug(f"CRITICAL: Failed in get_repo_chunks loop: {e}")
+        import traceback
+        _log_debug(traceback.format_exc())
+        raise e

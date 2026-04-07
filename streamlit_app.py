@@ -14,7 +14,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
 @st.cache_resource
 def load_backend_v3():
     import db_connector as db
-    from repo_scanner import get_repo_chunks
+    from repo_scanner import get_repo_chunks, _log_debug
     from ai_parser import parse_code_chunk, generate_embedding
     from file_processor import extract_text_from_file, chunk_text
     return {
@@ -31,6 +31,7 @@ def load_backend_v3():
         'Satellite': db.Satellite,
         'KeyPool': db.KeyPool,
         'get_repo_chunks': get_repo_chunks,
+        '_log_debug': _log_debug,
         'parse_code_chunk': parse_code_chunk,
         'generate_embedding': generate_embedding,
         'extract_text_from_file': extract_text_from_file,
@@ -47,6 +48,7 @@ FileMetadata = backend['FileMetadata']
 Satellite = backend['Satellite']
 KeyPool = backend['KeyPool']
 get_repo_chunks = backend['get_repo_chunks']
+_log_debug = backend['_log_debug']
 parse_code_chunk = backend['parse_code_chunk']
 generate_embedding = backend['generate_embedding']
 extract_text_from_file = backend['extract_text_from_file']
@@ -596,7 +598,6 @@ def auth_page():
 
 def render_custom_progress(status, progress, eta=None):
     """Neural Stream Terminal: A live, non-traditional data ingestion visualization"""
-    # Define a set of active-looking log messages for the terminal
     import random
     log_prefixes = ["DATA_FEED", "NEURAL_LINK", "VECTOR_SYNC", "AST_PARSE", "HUB_WRITE"]
     active_prefix = random.choice(log_prefixes)
@@ -793,50 +794,18 @@ def background_scan_task(repo_url, user_id, abort_event):
         except Exception:
             pass
 
+    _log_debug(f"WORKER: Started background_scan_task for {repo_url} (User: {user_id})")
     try:
-        # --- Phase 1: Clone ---
-        _update_db(0, "Preparing: Cloning repository...")
-        if abort_event.is_set(): return
+        _update_db(0, "Scanning Repository & Extracting Chunks...")
+        all_chunks = get_repo_chunks(repo_url)
         
-        from repo_scanner import clone_repo, scan_files, extract_functions_via_ast
-        repo_path = clone_repo(repo_url)
-        if abort_event.is_set(): 
-            _update_db(0, "Halted by User.")
+        if not all_chunks:
+            _log_debug("WORKER: No chunks extracted! Aborting.")
+            _update_db(0, "Error: No code/files found in target.")
             return
-
-        # --- Phase 2: File Discovery ---
-        _update_db(0, "Preparing: Scanning multi-language codebases...")
-        files = scan_files(repo_path)
-        if abort_event.is_set(): 
-            _update_db(0, "Halted by User.")
-            return
-            
-        total_files = len(files)
-
-        if total_files == 0:
-            _update_db(0, "No supported code files found in repository.")
-            return
-
-        # --- Phase 3: AST Chunking + Indexing ---
-        all_chunks = []
-        for fi, f in enumerate(files):
-            if abort_event.is_set(): 
-                _update_db(0, "Halted by User.")
-                return
-            if fi % 5 == 0: # Throttle parse updates
-                _update_db(0, f"Preparing: Parsing files... ({fi+1}/{total_files})")
-            all_chunks.extend(extract_functions_via_ast(f))
 
         total = len(all_chunks)
-        if total == 0:
-            _update_db(0, "No parseable functions found.")
-            return
-
-        _update_db(0, f"Initializing Ingestion of {total} code chunks...")
-        if abort_event.is_set(): 
-            _update_db(0, "Halted by User.")
-            return
-
+        _log_debug(f"WORKER: Starting indexing phase for {total} chunks.")
         success_count = 0
 
         with Session(engine) as scan_session:
@@ -864,6 +833,7 @@ def background_scan_task(repo_url, user_id, abort_event):
                     success_count += 1
 
                 # Update progress strictly based on index / total - Throttled to 2s
+                import time as _time
                 current_time = _time.time()
                 if not hasattr(background_scan_task, 'last_ui_update'):
                     background_scan_task.last_ui_update = 0
@@ -880,13 +850,15 @@ def background_scan_task(repo_url, user_id, abort_event):
                         scan_session.commit() # Push update live to DB
                         background_scan_task.last_ui_update = current_time
 
-        if not abort_event.is_set():
             _update_db(100, f"Complete — {success_count} code hubs indexed.")
-        else:
-            _update_db(0, "Halted by User.")
+            _log_debug(f"WORKER: Task Complete. Indexed {success_count} chunks.")
 
     except Exception as e:
-        _update_db(0, f"Critical Failure: {str(e)}")
+        import traceback
+        err_msg = f"Critical Failure: {str(e)}"
+        _log_debug(f"WORKER_CRASH: {err_msg}")
+        _log_debug(traceback.format_exc())
+        _update_db(0, err_msg)
 
 def process_file_content(uploaded_file, user_id):
     """Index a single file's content into the Hub - Supports Multi Format"""
@@ -912,6 +884,7 @@ def process_file_content(uploaded_file, user_id):
         st.session_state.scan_status = f"Analyzing {filename} with AI..."
         
         # Determine if we need to chunk (for large files) or process atomically
+        raw_text = uploaded_file.getvalue().decode("utf-8", errors="ignore")
         if len(raw_text) > 2000:
             chunks = chunk_text(raw_text, chunk_size=1500, overlap=100)
         else:
@@ -1187,7 +1160,24 @@ if menu == "Ingest":
             _time.sleep(1) # Brief pause so they can read the toast
             st.rerun()
 
-
+    # --- SYSTEM TELEMETRY (HIDDEN DEBUGGER) ---
+    with st.expander("🛠️ System Telemetry Logs (V6.1)", expanded=False):
+        st.caption("Raw ingestion stream from /tmp/vault_v6_debug.log")
+        try:
+            if os.path.exists("/tmp/vault_v6_debug.log"):
+                with open("/tmp/vault_v6_debug.log", "r") as f:
+                    logs = f.readlines()[-50:] # Last 50 lines
+                    st.code("".join(logs), language="text")
+            else:
+                st.write("No telemetry logs found yet.")
+        except Exception as e:
+            st.error(f"Failed to read logs: {e}")
+        
+        if st.button("Clear Debug Logs"):
+            try: 
+                with open("/tmp/vault_v6_debug.log", "w") as f: f.write("")
+                st.rerun()
+            except: pass
 
 elif menu == "Explorer":
     st.markdown(f"""
@@ -1228,7 +1218,7 @@ elif menu == "Explorer":
                     
                     st.code(hub_obj.code_snippet, language='python')
         else:
-            st.info("Vault is currently empty. Ingest code to see results.")
+            st.info("💡 Pro Tip: Use descriptive repository URLs for better high-level architectural summaries.")
 
     with tab_files:
         files = session.query(FileMetadata).filter(FileMetadata.user_id == st.session_state.user['id']).all()
